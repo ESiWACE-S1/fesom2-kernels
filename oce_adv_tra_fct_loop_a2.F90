@@ -1,4 +1,5 @@
 program oce_adv_tra_fct_loop_a2
+  use wallclock_mod
         implicit none
 
         integer :: n, nu1, nl1, nl, nz, myDim_elem2D, n_it, elem
@@ -18,10 +19,6 @@ program oce_adv_tra_fct_loop_a2
 
         !https://stackoverflow.com/a/6880672
         real(8)::t1,delta
-        iNTEGER :: clock_start,clock_end,clock_rate
-        REAL(KIND=8) :: elapsed_time
-
-        CALL SYSTEM_CLOCK(COUNT_RATE=clock_rate) ! Find the rate
 
         mype = 0
         write(file_name, '(i8)') mype
@@ -62,8 +59,7 @@ program oce_adv_tra_fct_loop_a2
         nl = maxval(nlevels(:)-ulevels(:)+1)
 
         write(*,*) "iterating over",MAX_ITERATIONS, " iterations..."
-        t1=secnds(0.0)
-        CALL SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
+        t1=wallclock()
         do n_it=1, MAX_ITERATIONS
                 !$acc parallel loop gang present(UV_rhs,nl,ulevels,nlevels,elem2D_nodes,fct_ttf_min,fct_ttf_max) &
                 !$acc& private(enodes,nu1,nl1)&
@@ -89,14 +85,9 @@ program oce_adv_tra_fct_loop_a2
                         endif
                 end do ! --> do elem=1, myDim_elem2D
         end do
-        delta=secnds(t1)
-        CALL SYSTEM_CLOCK(COUNT=clock_end) ! Stop timing
+        delta=wallclock()-t1
         write(*,*) "done"
-        ! Calculate the elapsed time in seconds:
-        elapsed_time=REAL((clock_end-clock_start)/clock_rate,8)
-
         write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
-        write(*,*) "elapsed", elapsed_time/real(MAX_ITERATIONS)
 
         deallocate(ulevels)
         deallocate(nlevels)

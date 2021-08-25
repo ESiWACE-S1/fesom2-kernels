@@ -1,4 +1,5 @@
 program oce_adv_tra_fct_loop_b1_horizontal
+  use wallclock_mod
         implicit none
 
         integer :: n, nu12, nl12, nz, myDim_edge2D, n_it, edge, myDim_nod2D, myDim_elem2D
@@ -21,10 +22,6 @@ program oce_adv_tra_fct_loop_b1_horizontal
 
         !https://stackoverflow.com/a/6880672
         real(8)::t1,delta
-        iNTEGER :: clock_start,clock_end,clock_rate
-        REAL(KIND=8) :: elapsed_time
-
-        CALL SYSTEM_CLOCK(COUNT_RATE=clock_rate) ! Find the rate
 
         mype = 0
 
@@ -95,8 +92,7 @@ program oce_adv_tra_fct_loop_b1_horizontal
         allocate(adf_h(MAX_LEVELS, myDim_edge2D))
 
         write(*,*) "iterating over",max_iterations, " iterations..."
-        t1=secnds(0.0)
-        call system_clock(count=clock_start) ! start timing
+        t1=wallclock()
         do n_it=1, max_iterations
                 !$acc parallel loop gang present(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)&
                 !$acc& private(enodes,nl12,nu12)&
@@ -132,18 +128,12 @@ program oce_adv_tra_fct_loop_b1_horizontal
                         end do
                 end do
         end do
-        delta=secnds(t1)
-        call system_clock(count=clock_end) ! stop timing
+        delta=wallclock()-t1
         write(*,*) "done"
-        ! calculate the elapsed time in seconds:
-        elapsed_time=real((clock_end-clock_start)/clock_rate,8)
-
         write(*,*) "timing", delta, delta/real(max_iterations)
-        write(*,*) "elapsed", elapsed_time/real(max_iterations)
 
         write(*,*) "iterating over",max_iterations, " iterations..."
-        t1=secnds(0.0)
-        call system_clock(count=clock_start) ! start timing
+        t1=wallclock()
         do n_it=1, max_iterations
                 !$acc parallel loop gang present(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)&
                 !$acc& private(enodes,nl12,nu12)&
@@ -173,14 +163,9 @@ program oce_adv_tra_fct_loop_b1_horizontal
                         end do
                 end do
         end do
-        delta=secnds(t1)
-        call system_clock(count=clock_end) ! stop timing
+        delta=wallclock()-t1
         write(*,*) "done"
-        ! calculate the elapsed time in seconds:
-        elapsed_time=real((clock_end-clock_start)/clock_rate,8)
-
         write(*,*) "timing", delta, delta/real(max_iterations)
-        write(*,*) "elapsed", elapsed_time/real(max_iterations)
 
 
 end program oce_adv_tra_fct_loop_b1_horizontal

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8...3.19)
 
-project(fesom2-benchmarks VERSION 1.0.0 LANGUAGES Fortran)
+project(fesom2-benchmarks VERSION 1.0.0 LANGUAGES C Fortran)
 
 option(WITH_ACC "compile with OpenACC" OFF)
 # https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html
@@ -35,11 +35,14 @@ target_link_options(options_flags INTERFACE
     >
   >
 )
+target_link_libraries(options_flags INTERFACE wallclock)
 
-add_executable(oce_adv_tra_fct_loop_a1            oce_adv_tra_fct_loop_a1.F90)
-add_executable(oce_adv_tra_fct_loop_a1_vlimit1    oce_adv_tra_fct_loop_a1_vlimit1.F90)
-add_executable(oce_adv_tra_fct_loop_a2            oce_adv_tra_fct_loop_a2.F90)
-add_executable(oce_adv_tra_fct_loop_b1_horizontal oce_adv_tra_fct_loop_b1_horizontal.F90)
+add_library(wallclock wallclock.c)
+
+add_executable(oce_adv_tra_fct_loop_a1            wallclock.F90 oce_adv_tra_fct_loop_a1.F90)
+add_executable(oce_adv_tra_fct_loop_a1_vlimit1    wallclock.F90 oce_adv_tra_fct_loop_a1_vlimit1.F90)
+add_executable(oce_adv_tra_fct_loop_a2            wallclock.F90 oce_adv_tra_fct_loop_a2.F90)
+add_executable(oce_adv_tra_fct_loop_b1_horizontal wallclock.F90 oce_adv_tra_fct_loop_b1_horizontal.F90)
 
 target_link_libraries(oce_adv_tra_fct_loop_a1            options_flags)
 target_link_libraries(oce_adv_tra_fct_loop_a1_vlimit1    options_flags)
