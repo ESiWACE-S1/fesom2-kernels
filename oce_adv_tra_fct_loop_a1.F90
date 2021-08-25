@@ -14,6 +14,15 @@ program oce_adv_tra_fct_loop_a1
         integer, parameter :: MAX_ITERATIONS=1000
         character(MAX_PATH) :: file_name
         integer :: mype, fileID, nn
+        ! LBS_TRANSFORM
+        integer, dimension(:), allocatable :: csr_node2levels ! 0:myDim_nod2D
+        integer, dimension(:), allocatable :: csr_node2levels_ID ! level indices
+        integer, dimension(:), allocatable :: csr_node2levels_nodID ! node indices
+        integer :: nlevels_sum
+        double precision, dimension(:), allocatable :: fct_ttf_min_lbs
+        double precision, dimension(:), allocatable :: fct_ttf_max_lbs
+        double precision, dimension(:), allocatable :: LO_lbs
+        double precision, dimension(:), allocatable :: ttf_lbs
 
         !https://stackoverflow.com/a/6880672
         real(8)::t1,delta
@@ -68,8 +77,92 @@ program oce_adv_tra_fct_loop_a1
         write(*,*) "done"
         write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
 
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "LOOP_SEQ: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+                !$acc parallel loop gang vector present(fct_ttf_max,fct_ttf_min,LO,ttf,nlevels_nod2D,ulevels_nod2D)&
+                !$acc& private(nl1,nu1)&
+                !$acc
+                do n=1,myDim_nod2D
+                        nu1 = ulevels_nod2D(n)
+                        nl1 = nlevels_nod2D(n)
+                        !$acc loop seq
+                        do nz=nu1, nl1-1
+                                fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
+                                fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
+                        end do
+                end do
+        end do
+        delta=wallclock()-t1
+        write(*,*) "done"
         write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
-        write(*,*) "elapsed", elapsed_time/real(MAX_ITERATIONS)
+
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "LBS_TRANSFORM: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        allocate(csr_node2levels(0:myDim_nod2D))
+        csr_node2levels(0) = 0
+        do n=1,myDim_nod2D
+           nu1 = ulevels_nod2D(n)
+           nl1 = nlevels_nod2D(n)
+           csr_node2levels(n) = csr_node2levels(n-1) + nl1-1-nu1+1
+           nlevels_sum = nlevels_sum + nl1-1-nu1+1
+        enddo
+        write(*,*) nlevels_sum, csr_node2levels(myDim_nod2D)
+        allocate(csr_node2levels_ID(nlevels_sum))
+        allocate(csr_node2levels_nodID(nlevels_sum))
+        nn = 0
+        do n=1,myDim_nod2D
+           nu1 = ulevels_nod2D(n)
+           nl1 = nlevels_nod2D(n)
+           do nz=nu1, nl1-1
+              nn = nn + 1
+              csr_node2levels_ID(nn) = nz
+              csr_node2levels_nodID(nn) = n
+           end do
+        end do
+        write(*,*) nlevels_sum, csr_node2levels(myDim_nod2D), nn
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+        !        !$acc parallel loop gang vector present(fct_ttf_max,fct_ttf_min,LO,ttf,nlevels_nod2D,ulevels_nod2D)&
+        !        !$acc& private(nl1,nu1)&
+        !        !$acc
+           do nn=1,csr_node2levels(myDim_nod2D)
+              n = csr_node2levels_nodID(nn)
+              nz = csr_node2levels_ID(nn)
+              !                nu1 = ulevels_nod2D(n)
+              !                nl1 = nlevels_nod2D(n)
+              !                !$acc loop seq
+              !                do nz=nu1, nl1-1
+              fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
+              fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
+              !                end do
+           end do
+        end do
+        delta=wallclock()-t1
+        write(*,*) "done"
+        write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
+
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "LBS_TRANSFORM linear access: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        allocate(fct_ttf_min_lbs(nlevels_sum))
+        allocate(fct_ttf_max_lbs(nlevels_sum))
+        allocate(ttf_lbs(nlevels_sum))
+        allocate(LO_lbs(nlevels_sum))
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           do nn=1,csr_node2levels(myDim_nod2D)
+              fct_ttf_max_lbs(nn)=max(LO_lbs(nn), ttf_lbs(nn))
+              fct_ttf_min_lbs(nn)=min(LO_lbs(nn), ttf_lbs(nn))
+           end do
+        end do
+        delta=wallclock()-t1
+        write(*,*) "done"
+        write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
+
 
         deallocate(ulevels_nod2D)
         deallocate(nlevels_nod2D)
