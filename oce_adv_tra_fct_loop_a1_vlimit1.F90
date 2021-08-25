@@ -74,8 +74,8 @@ program oce_adv_tra_fct_loop_a1_vlimit1
         t1=secnds(0.0)
         CALL SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
         do n_it=1, MAX_ITERATIONS
-                !$acc parallel loop gang present(ulevels_nod2D,nlevels_nod2D,nod_in_elem2D,nod_in_elem2D_num,UV_rhs,&
-                !$acc& fct_ttf_min,fct_ttf_max,LO) private(tvert_min,tvert_max)&
+                !$acc parallel loop gang present(ulevels_nod2D,nlevels_nod2D,nod_in_elem2D,nod_in_elem2D_num,UV_rhs&
+                !$acc& ) private(tvert_min,tvert_max)&
                 !$acc& private(nu1,nl1)&
 #ifdef WITH_ACC_VECTOR_LENGTH
                 !$acc& vector_length(z_vector_length)&
