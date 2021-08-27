@@ -28,23 +28,7 @@ program oce_adv_tra_fct_loop_a1
         real(8)::t1,delta, delta_orig
 
         mype = 0
-        write(file_name, '(i8)') mype
-        file_name='loops_nod2D_levels_'//trim(adjustl(file_name))//'.dat'
-        open(fileID, file=file_name)
-
-        read(fileID, *) myDim_nod2D
-        write(*,*) "loading",myDim_nod2D, " nodes"
-
-        allocate(ulevels_nod2D(myDim_nod2D))
-        allocate(nlevels_nod2D(myDim_nod2D))
-
-        do n=1,myDim_nod2D !+ edim_nod2d
-                ! TODO check nz<=MAX_LEVELS
-                read(fileID, *) nn, nz, ulevels_nod2D(n), nlevels_nod2D(n)
-                nlevels_nod2D(n) = nlevels_nod2D(n)+1
-        end do
-
-        close(fileID)
+        myDim_nod2D = read_nod2D_levels(mype, ulevels_nod2D, nlevels_nod2D)
 
         allocate(fct_ttf_min(MAX_LEVELS, myDim_nod2D))
         allocate(fct_ttf_max(MAX_LEVELS, myDim_nod2D))
