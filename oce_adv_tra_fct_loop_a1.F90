@@ -25,7 +25,7 @@ program oce_adv_tra_fct_loop_a1
         double precision, dimension(:), allocatable :: ttf_lbs
 
         !https://stackoverflow.com/a/6880672
-        real(8)::t1,delta
+        real(8)::t1,delta, delta_orig
 
         mype = 0
         write(file_name, '(i8)') mype
@@ -74,8 +74,9 @@ program oce_adv_tra_fct_loop_a1
                 end do
         end do
         delta=wallclock()-t1
+        delta_orig=delta
         write(*,*) "done"
-        write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "LOOP_SEQ: iterating over",MAX_ITERATIONS, " iterations..."
@@ -97,7 +98,7 @@ program oce_adv_tra_fct_loop_a1
         end do
         delta=wallclock()-t1
         write(*,*) "done"
-        write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "LBS_TRANSFORM: iterating over",MAX_ITERATIONS, " iterations..."
@@ -143,7 +144,7 @@ program oce_adv_tra_fct_loop_a1
         end do
         delta=wallclock()-t1
         write(*,*) "done"
-        write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "LBS_TRANSFORM linear access: iterating over",MAX_ITERATIONS, " iterations..."
@@ -161,7 +162,7 @@ program oce_adv_tra_fct_loop_a1
         end do
         delta=wallclock()-t1
         write(*,*) "done"
-        write(*,*) "timing", delta, delta/real(MAX_ITERATIONS)
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
 
         deallocate(ulevels_nod2D)
