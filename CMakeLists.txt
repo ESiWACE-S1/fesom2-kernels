@@ -20,7 +20,7 @@ target_compile_options(options_flags INTERFACE
    >
 
   $<$<Fortran_COMPILER_ID:PGI>:
-    -fast -fastsse -O3 -Minline -Munroll
+  -fast -fastsse -O3 -Minline -Munroll
     $<$<BOOL:${WITH_ACC}>:
       -acc -ta=tesla:cc80
       -Minfo=accel
@@ -47,3 +47,6 @@ target_link_libraries(oce_adv_tra_fct_loop_a1            options_flags)
 target_link_libraries(oce_adv_tra_fct_loop_a1_vlimit1    options_flags)
 target_link_libraries(oce_adv_tra_fct_loop_a2            options_flags)
 target_link_libraries(oce_adv_tra_fct_loop_b1_horizontal options_flags)
+
+add_executable(oce_adv_tra_fct            $<TARGET_OBJECTS:loop_utils> oce_adv_tra_fct.F90)
+target_link_libraries(oce_adv_tra_fct     options_flags)
