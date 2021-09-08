@@ -15,11 +15,8 @@ program oce_adv_tra_fct_loop_a1_vlimit1
         double precision, dimension(:,:), allocatable :: fct_ttf_min
         double precision, dimension(:,:), allocatable :: fct_ttf_max
         double precision, dimension(:,:), allocatable :: LO
-        integer, parameter :: MAX_PATH=1024
         integer, parameter :: MAX_LEVELS=50
-        integer, parameter :: MAX_NOD_IN_ELEM=10
         integer, parameter :: MAX_ITERATIONS=1000
-        character(MAX_PATH) :: file_name, line
         integer :: mype, fileID, nn
         ! LBS_TRANSFORM
         integer, dimension(:), allocatable :: csr_node2levels ! 0:myDim_nod2D
@@ -34,34 +31,17 @@ program oce_adv_tra_fct_loop_a1_vlimit1
         double precision, dimension(:), allocatable :: ttf_lbs
         double precision, dimension(:,:,:), allocatable :: UV_rhs_
 
+        double precision, dimension(:,:), allocatable :: U_rhs
+        double precision, dimension(:,:), allocatable :: V_rhs
 
         !https://stackoverflow.com/a/6880672
         real(8)::t1,delta, delta_orig
 
         mype = 0
         myDim_nod2D = read_nod2D_levels(mype, ulevels_nod2D, nlevels_nod2D)
+        myDim_nod2D = read_nod2D_elems(mype, nod_in_elem2D_num, nod_in_elem2D)
 
-        write(file_name, '(i8)') mype
-        file_name='loops_nod2D_elems_'//trim(adjustl(file_name))//'.dat'
-        open(fileID, file=file_name)
-        read(fileID, '(i8)') myDim_nod2D
-
-        allocate(nod_in_elem2D_num(myDim_nod2D))
-        allocate(nod_in_elem2D(MAX_NOD_IN_ELEM, myDim_nod2D))
-
-        do n=1,myDim_nod2D !+ edim_nod2d
-                !read(fileID,*) nn, nod_in_elem2D_num(n), nod_in_elem2D(1:mesh%nod_in_elem2D_num(n),n)
-                read(fileID, '(a)') line
-                read(line,*) nn, nod_in_elem2D_num(n)
-                read(line,*) nn, nod_in_elem2D_num(n), nod_in_elem2D(1:nod_in_elem2D_num(n), n)
-        end do
-        close(fileID)
-
-        write(file_name, '(i8)') mype
-        file_name='loops_elem2D_nodes_'//trim(adjustl(file_name))//'.dat'
-        open(fileID, file=file_name)
-        read(fileID, '(i8)') myDim_elem2D
-        close(fileID)
+        myDim_elem2D = get_myDim_elem2D(mype)
 
         allocate(tvert_min(MAX_LEVELS))
         allocate(tvert_max(MAX_LEVELS))
@@ -70,7 +50,7 @@ program oce_adv_tra_fct_loop_a1_vlimit1
         allocate(fct_ttf_max(MAX_LEVELS, myDim_nod2D))
         allocate(LO(MAX_LEVELS, myDim_nod2D))
 
-
+        write(*,*) "COMPUTE: fct_ttf_max/min(nz,n)=minval/maxval(maxval/minval(UV_rhs(1:nz,elnodes,n)) - LO(nz,n)"
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "iterating over",MAX_ITERATIONS, " iterations..."
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -228,6 +208,60 @@ program oce_adv_tra_fct_loop_a1_vlimit1
         write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "3 LOOPS+max(nz-1,nz,nz+1)+U/V_rhs: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        allocate(U_rhs(MAX_LEVELS, myDim_elem2D))
+        allocate(V_rhs(MAX_LEVELS, myDim_elem2D))
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+                !$acc parallel loop gang present(ulevels_nod2D,nlevels_nod2D,nod_in_elem2D,nod_in_elem2D_num,UV_rhs&
+                !$acc& ) private(tvert_min,tvert_max)&
+                !$acc& private(nu1,nl1)&
+#ifdef WITH_ACC_VECTOR_LENGTH
+                !$acc& vector_length(z_vector_length)&
+#endif
+                !$acc
+                do n=1, myDim_nod2D
+                    nu1 = ulevels_nod2D(n)
+                    nl1 = nlevels_nod2D(n)
+                    do nz=nu1,nl1-1
+                       tvert_max(nz) = huge(1.0)
+                       tvert_min(nz) = -huge(1.0)
+                    end do
+                    !$acc loop vector
+                    do nn=1, nod_in_elem2D_num(n)
+                       elem = nod_in_elem2D(nn,n)
+                       do nz=nu1,nl1-1
+                          tvert_max(nz)= max(tvert_max(nz), U_rhs(nz,elem))
+                          tvert_min(nz)= min(tvert_min(nz), V_rhs(nz,elem))
+                       end do
+                    end do
+                    !___________________________________________________________________
+                    ! calc max,min increment of surface layer with respect to low order
+                    ! solution
+                    fct_ttf_max(nu1,n)=tvert_max(nu1)-LO(nu1,n)
+                    fct_ttf_min(nu1,n)=tvert_min(nu1)-LO(nu1,n)
+
+                    ! calc max,min increment from nz-1:nz+1 with respect to low order
+                    ! solution at layer nz
+                    !$acc loop vector
+                    do nz=nu1+1,nl1-2
+                        fct_ttf_max(nz,n)=max(tvert_max(nz-1),tvert_max(nz), tvert_max(nz+1))-LO(nz,n)
+                        fct_ttf_min(nz,n)=min(tvert_min(nz-1),tvert_min(nz), tvert_min(nz+1))-LO(nz,n)
+                    end do
+                    ! calc max,min increment of bottom layer -1 with respect to low order
+                    ! solution
+                    nz=nl1-1
+                    fct_ttf_max(nz,n)=tvert_max(nz)-LO(nz,n)
+                    fct_ttf_min(nz,n)=tvert_min(nz)-LO(nz,n)
+                end do
+
+        end do
+        delta=wallclock()-t1
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         allocate(csr_node2levels(0:myDim_nod2D))
         csr_node2levels(0) = 0
         nlevels_sum=0
@@ -275,8 +309,8 @@ program oce_adv_tra_fct_loop_a1_vlimit1
               n = csr_node2levels_nodID(nn)
               do j=1, nod_in_elem2D_num(n)
                  elem = nod_in_elem2D(j,n)
-                 tvert_max_lbs(nn)= max(tvert_max_lbs(nn), UV_rhs(1,nz,elem))
-                 tvert_min_lbs(nn)= min(tvert_min_lbs(nn), UV_rhs(2,nz,elem))
+                 tvert_max_lbs(nn)= max(tvert_max_lbs(nn), UV_rhs(nz,elem))
+                 tvert_min_lbs(nn)= min(tvert_min_lbs(nn), UV_rhs(nz,elem))
               end do
            end do
            !!!___________________________________________________________________
@@ -317,8 +351,8 @@ program oce_adv_tra_fct_loop_a1_vlimit1
                  ! TODO nz>1 when cavity
                  !do nz=1,csr_node2levels(n)-csr_node2levels(n-1)
                  do nz=csr_node2levels_ID(nn+1), csr_node2levels_ID(csr_node2levels(n))
-                    tvert_max_lbs(nn+nz)= max(tvert_max_lbs(nn+nz), UV_rhs(1,nz,elem))
-                    tvert_min_lbs(nn+nz)= min(tvert_min_lbs(nn+nz), UV_rhs(2,nz,elem))
+                    tvert_max_lbs(nn+nz)= max(tvert_max_lbs(nn+nz), U_rhs(nz,elem))
+                    tvert_min_lbs(nn+nz)= min(tvert_min_lbs(nn+nz), V_rhs(nz,elem))
                  end do
               end do
            end do

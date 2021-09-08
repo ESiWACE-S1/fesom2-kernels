@@ -1,5 +1,6 @@
 program oce_adv_tra_fct_loop_a1
   use wallclock_mod
+  use io_mod
         implicit none
 
         integer :: n, nu1, nl1, nz, myDim_nod2D, n_it
@@ -9,11 +10,9 @@ program oce_adv_tra_fct_loop_a1
         double precision, dimension(:,:), allocatable :: fct_ttf_max
         double precision, dimension(:,:), allocatable :: LO
         double precision, dimension(:,:), allocatable :: ttf
-        integer, parameter :: MAX_PATH=1024
         integer, parameter :: MAX_LEVELS=50
         integer, parameter :: MAX_ITERATIONS=1000
-        character(MAX_PATH) :: file_name
-        integer :: mype, fileID, nn
+        integer :: mype, nn
         ! LBS_TRANSFORM
         integer, dimension(:), allocatable :: csr_node2levels ! 0:myDim_nod2D
         integer, dimension(:), allocatable :: csr_node2levels_ID ! level indices
@@ -35,7 +34,7 @@ program oce_adv_tra_fct_loop_a1
         allocate(LO(MAX_LEVELS, myDim_nod2D))
         allocate(ttf(MAX_LEVELS, myDim_nod2D))
 
-
+        write(*,*) "COMPUTE: fct_ttf_max/min(nz,n) = max(LO(nz,n), ttf(nz,n)"
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "DEFAULT: iterating over",MAX_ITERATIONS, " iterations..."
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -88,6 +87,7 @@ program oce_adv_tra_fct_loop_a1
         write(*,*) "LBS_TRANSFORM: iterating over",MAX_ITERATIONS, " iterations..."
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         allocate(csr_node2levels(0:myDim_nod2D))
+        nlevels_sum = 0
         csr_node2levels(0) = 0
         do n=1,myDim_nod2D
            nu1 = ulevels_nod2D(n)
@@ -109,21 +109,18 @@ program oce_adv_tra_fct_loop_a1
            end do
         end do
         write(*,*) nlevels_sum, csr_node2levels(myDim_nod2D), nn
+
+        allocate(ttf_lbs(nlevels_sum))
+        allocate(LO_lbs(nlevels_sum))
+
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-        !        !$acc parallel loop gang vector present(fct_ttf_max,fct_ttf_min,LO,ttf,nlevels_nod2D,ulevels_nod2D)&
-        !        !$acc& private(nl1,nu1)&
-        !        !$acc
-           do nn=1,csr_node2levels(myDim_nod2D)
-              n = csr_node2levels_nodID(nn)
-              nz = csr_node2levels_ID(nn)
-              !                nu1 = ulevels_nod2D(n)
-              !                nl1 = nlevels_nod2D(n)
-              !                !$acc loop seq
-              !                do nz=nu1, nl1-1
-              fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
-              fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
-              !                end do
+           do n=1,myDim_nod2D
+              do nn=csr_node2levels(n-1)+1,csr_node2levels(n)
+                 nz = csr_node2levels_ID(nn)
+                 fct_ttf_max(nz,n)=max(LO_lbs(nn), ttf_lbs(nn))
+                 fct_ttf_min(nz,n)=min(LO_lbs(nn), ttf_lbs(nn))
+              end do
            end do
         end do
         delta=wallclock()-t1
@@ -135,13 +132,35 @@ program oce_adv_tra_fct_loop_a1
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         allocate(fct_ttf_min_lbs(nlevels_sum))
         allocate(fct_ttf_max_lbs(nlevels_sum))
-        allocate(ttf_lbs(nlevels_sum))
-        allocate(LO_lbs(nlevels_sum))
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
            do nn=1,csr_node2levels(myDim_nod2D)
               fct_ttf_max_lbs(nn)=max(LO_lbs(nn), ttf_lbs(nn))
               fct_ttf_min_lbs(nn)=min(LO_lbs(nn), ttf_lbs(nn))
+           end do
+        end do
+        delta=wallclock()-t1
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "LBS_TRANSFORM linear access+PUSHBACK: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           do nn=1,csr_node2levels(myDim_nod2D)
+              fct_ttf_max_lbs(nn)=max(LO_lbs(nn), ttf_lbs(nn))
+              fct_ttf_min_lbs(nn)=min(LO_lbs(nn), ttf_lbs(nn))
+           end do
+           nn = 0
+           do n=1,myDim_nod2D
+              nu1 = ulevels_nod2D(n)
+              nl1 = nlevels_nod2D(n)
+              do nz=nu1, nl1-1
+                 nn = nn + 1
+                 fct_ttf_max(nz, n) = fct_ttf_max_lbs(nn)
+                 fct_ttf_min(nz, n) = fct_ttf_min_lbs(nn)
+              end do
            end do
         end do
         delta=wallclock()-t1

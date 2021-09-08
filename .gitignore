@@ -7,4 +7,7 @@ oce_adv_tra_fct_loop_a1
 oce_adv_tra_fct_loop_a1_vlimit1
 oce_adv_tra_fct_loop_a2
 oce_adv_tra_fct_loop_b1_horizontal
+oce_adv_tra_fct
 Makefile
+*.mod
+*.a
