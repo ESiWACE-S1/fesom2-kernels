@@ -20,7 +20,8 @@ program oce_adv_tra_fct
   integer, dimension(:), allocatable :: nlevels
   integer, dimension(3) :: enodes
   integer, dimension(:,:), allocatable :: elem2D_nodes
-  double precision, dimension(:,:,:), allocatable :: UV_rhs
+  double precision, dimension(:,:), allocatable :: U_rhs
+  double precision, dimension(:,:), allocatable :: V_rhs
   double precision :: bignumber = huge(1.0)
 
   integer, dimension(:), allocatable :: nod_in_elem2D_num
@@ -28,7 +29,7 @@ program oce_adv_tra_fct
   double precision, dimension(:), allocatable :: tvert_min
   double precision, dimension(:), allocatable :: tvert_max
 
-  integer :: nl2, nu2, el(2), edge
+  integer :: nl2, nu2, edge, el(2)
   integer :: myDim_edge2D
   integer, dimension(:,:), allocatable :: edges
   integer, dimension(:,:), allocatable :: edge_tri
@@ -41,7 +42,7 @@ program oce_adv_tra_fct
   double precision :: dt, flux, flux_eps
   double precision, dimension(:,:), allocatable :: areasvol
   
-  double precision :: ae
+  double precision :: a, an, ae
   real(8)::t1,delta, delta_orig
 
   mype = 0
@@ -56,7 +57,8 @@ program oce_adv_tra_fct
   myDim_elem2D = read_elem2D_nodes(mype, elem2D_nodes)
   myDim_elem2D = read_elem2D_levels(mype, ulevels, nlevels)
 
-  allocate(UV_rhs(2,MAX_LEVELS, myDim_elem2D))
+  allocate(U_rhs(MAX_LEVELS, myDim_elem2D))
+  allocate(V_rhs(MAX_LEVELS, myDim_elem2D))
 
   myDim_nod2D = read_nod2D_elems(mype, nod_in_elem2D_num, nod_in_elem2D)
 
@@ -79,10 +81,7 @@ program oce_adv_tra_fct
   do n_it=1, MAX_ITERATIONS
      ! loop a1
      do n=1,myDim_nod2D !+ edim_nod2d
-        nu1 = ulevels_nod2D(n)
-        nl1 = nlevels_nod2D(n)
-        !$acc loop vector
-        do nz=nu1, nl1-1
+        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
            fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
            fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
         end do
@@ -91,20 +90,14 @@ program oce_adv_tra_fct
      ! loop a2
      do elem=1, myDim_elem2D
         enodes=elem2D_nodes(:,elem)
-        nu1 = ulevels(elem)
-        nl1 = nlevels(elem)
-        !$acc loop vector
-        do nz=nu1, nl1-1
-           UV_rhs(1,nz,elem)=maxval(fct_ttf_max(nz,enodes))
-           UV_rhs(2,nz,elem)=minval(fct_ttf_min(nz,enodes))
+        do nz=ulevels(elem), nlevels(elem)
+           U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
+           V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
         end do
-        if (nl1<=nl-1) then
-           !$acc loop vector
-           do nz=nl1,nl-1
-              UV_rhs(1,nz,elem)=-bignumber
-              UV_rhs(2,nz,elem)= bignumber
-           end do
-        endif
+        do nz=nlevels(elem),nl-1
+           U_rhs(nz,elem)=-bignumber
+           V_rhs(nz,elem)= bignumber
+        end do
      end do ! --> do elem=1, myDim_elem2D
 
      ! loop a1 vlimit=1
@@ -112,12 +105,16 @@ program oce_adv_tra_fct
         nu1 = ulevels_nod2D(n)
         nl1 = nlevels_nod2D(n)
         do nz=nu1,nl1-1
-           ! max,min horizontal bound in cluster around node n in every
-           ! vertical layer
-           ! nod_in_elem2D     --> elem indices of which node n is surrounded
-           ! nod_in_elem2D_num --> max number of surrounded elem
-           tvert_max(nz)= maxval(UV_rhs(1,nz,nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
-           tvert_min(nz)= minval(UV_rhs(2,nz,nod_in_elem2D(1:nod_in_elem2D_num(n),n)))
+           tvert_max(nz) = huge(1.0d0)
+           tvert_min(nz) = -huge(1.0d0)
+        end do
+        !$acc loop vector
+        do nn=1, nod_in_elem2D_num(n)
+           elem = nod_in_elem2D(nn,n)
+           do nz=nu1,nl1-1
+              tvert_max(nz)= max(tvert_max(nz), U_rhs(nz,elem))
+              tvert_min(nz)= min(tvert_min(nz), V_rhs(nz,elem))
+           end do
         end do
 
         !___________________________________________________________________
@@ -128,10 +125,9 @@ program oce_adv_tra_fct
 
         ! calc max,min increment from nz-1:nz+1 with respect to low order
         ! solution at layer nz
-        !$acc loop vector
         do nz=nu1+1,nl1-2
-           fct_ttf_max(nz,n)=maxval(tvert_max(nz-1:nz+1))-LO(nz,n)
-           fct_ttf_min(nz,n)=minval(tvert_min(nz-1:nz+1))-LO(nz,n)
+           fct_ttf_max(nz,n)=max(tvert_max(nz-1),tvert_max(nz), tvert_max(nz+1))-LO(nz,n)
+           fct_ttf_min(nz,n)=min(tvert_min(nz-1),tvert_min(nz), tvert_min(nz+1))-LO(nz,n)
         end do
         ! calc max,min increment of bottom layer -1 with respect to low order
         ! solution
@@ -142,56 +138,36 @@ program oce_adv_tra_fct
 
      ! loop b1
      do n=1, myDim_nod2D
-        nu1 = ulevels_nod2D(n)
-        nl1 = nlevels_nod2D(n)
-        !$acc loop vector
-        do nz=nu1,nl1-1
+        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
            fct_plus(nz,n)=0.
            fct_minus(nz,n)=0.
         end do
      end do
      ! vertical
      do n=1, myDim_nod2D
-        nu1 = ulevels_nod2D(n)
-        nl1 = nlevels_nod2D(n)
-        do nz=nu1,nl1-1
-           fct_plus(nz,n) =fct_plus(nz,n) +(max(0.0d0,adf_v(nz,n))+max(0.0d0,-adf_v(nz+1,n)))
-           fct_minus(nz,n)=fct_minus(nz,n)+(min(0.0d0,adf_v(nz,n))+min(0.0d0,-adf_v(nz+1,n)))
+        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
+           a = adf_v(nz,n)
+           an= adf_v(nz+1,n)
+           fct_plus(nz,n) =fct_plus(nz,n) +(max(0.0d0,a)+max(0.0d0,-an))
+           fct_minus(nz,n)=fct_minus(nz,n)+(min(0.0d0,a)+min(0.0d0,-an))
         end do
      end do
      ! horizontal
      do edge=1, myDim_edge2D
         enodes(1:2)=edges(:,edge)
-        el=edge_tri(:,edge)
-        nl1=nlevels(el(1))-1
-        nu1=ulevels(el(1))
-        nl2=0
-        nu2=0
-        if(el(2)>0) then
-           nl2=nlevels(el(2))-1
-           nu2=ulevels(el(2))
-        end if
-
-        nl12 = max(nl1,nl2)
-        nu12 = nu1
-        if (nu2>0) nu12 = min(nu1,nu2)
-
-        do nz=nu12, nl12
-           fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, adf_h(nz,edge))
-           fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, adf_h(nz,edge))
-           fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-adf_h(nz,edge))
-           fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-adf_h(nz,edge))
+        do nz=ulevels_edge(edge), nlevels_edge(edge)
+           a = adf_h(nz,edge)
+           fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, a)
+           fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, a)
+           fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-a)
+           fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-a)
         end do
      end do
 
 
      ! loop b2
      do n=1,myDim_nod2D
-        nu1=ulevels_nod2D(n)
-        nl1=nlevels_nod2D(n)
-        !$acc loop vector&
-        !$acc& private(flux)
-        do nz=nu1,nl1-1
+        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
            flux=fct_plus(nz,n)*dt/areasvol(nz,n)+flux_eps
            fct_plus(nz,n)=min(1.0d0,fct_ttf_max(nz,n)/flux)
            flux=fct_minus(nz,n)*dt/areasvol(nz,n)-flux_eps
@@ -216,8 +192,6 @@ program oce_adv_tra_fct
         adf_v(nz,n)=ae*adf_v(nz,n) 
 
         !_______________________________________________________________________
-        !$acc loop vector&
-        !$acc& private(ae,flux)
         do nz=nu1+1,nl1-1
            ae=1.0d0
            flux=adf_v(nz,n)
@@ -237,21 +211,7 @@ program oce_adv_tra_fct
 
      do edge=1, myDim_edge2D
         enodes(1:2)=edges(:,edge)
-        el=edge_tri(:,edge)
-        nu1=ulevels(el(1))
-        nl1=nlevels(el(1))-1
-        nl2=0
-        nu2=0
-        if(el(2)>0) then
-           nu2=ulevels(el(2))
-           nl2=nlevels(el(2))-1
-        end if
-
-        nl12 = max(nl1,nl2)
-        nu12 = nu1
-        if (nu2>0) nu12 = min(nu1,nu2)
-
-        do nz=nu12, nl12
+        do nz=ulevels_edge(edge), nlevels_edge(edge)
            ae=1.0d0
            flux=adf_h(nz,edge)
 

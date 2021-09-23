@@ -11,3 +11,6 @@ oce_adv_tra_fct
 Makefile
 *.mod
 *.a
+oce_adv_tra_fct_opt1
+oce_adv_tra_fct_opt1_acc
+oce_adv_tra_fct_opt1_acc_collapse

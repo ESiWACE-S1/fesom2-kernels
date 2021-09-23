@@ -23,6 +23,7 @@ program oce_adv_tra_fct_loop_a1
         double precision, dimension(:), allocatable :: LO_lbs
         double precision, dimension(:), allocatable :: ttf_lbs
 
+        integer :: nl
         !https://stackoverflow.com/a/6880672
         real(8)::t1,delta, delta_orig
 
@@ -40,16 +41,9 @@ program oce_adv_tra_fct_loop_a1
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-                !$acc parallel loop gang present(fct_ttf_max,fct_ttf_min,LO,ttf,nlevels_nod2D,ulevels_nod2D)&
-                !$acc& private(nl1,nu1)&
-#ifdef WITH_ACC_VECTOR_LENGTH
-                !$acc& vector_length(z_vector_length)&
-#endif
-                !$acc
                 do n=1,myDim_nod2D
                         nu1 = ulevels_nod2D(n)
                         nl1 = nlevels_nod2D(n)
-                        !$acc loop vector
                         do nz=nu1, nl1-1
                                 fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
                                 fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
@@ -58,28 +52,6 @@ program oce_adv_tra_fct_loop_a1
         end do
         delta=wallclock()-t1
         delta_orig=delta
-        write(*,*) "done"
-        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
-
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        write(*,*) "LOOP_SEQ: iterating over",MAX_ITERATIONS, " iterations..."
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        t1=wallclock()
-        do n_it=1, MAX_ITERATIONS
-                !$acc parallel loop gang vector present(fct_ttf_max,fct_ttf_min,LO,ttf,nlevels_nod2D,ulevels_nod2D)&
-                !$acc& private(nl1,nu1)&
-                !$acc
-                do n=1,myDim_nod2D
-                        nu1 = ulevels_nod2D(n)
-                        nl1 = nlevels_nod2D(n)
-                        !$acc loop seq
-                        do nz=nu1, nl1-1
-                                fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
-                                fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
-                        end do
-                end do
-        end do
-        delta=wallclock()-t1
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
@@ -167,6 +139,62 @@ program oce_adv_tra_fct_loop_a1
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
+#ifdef _OPENACC
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        !$acc enter data copyin(ulevels_nod2D, ulevels_nod2D, LO, ttf)
+        !$acc enter data create(fct_ttf_max, fct_ttf_min)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(ulevels_nod2D, ulevels_nod2D, LO, ttf, fct_ttf_max, fct_ttf_min)
+           do n=1,myDim_nod2D
+              nu1 = ulevels_nod2D(n)
+              nl1 = nlevels_nod2D(n)
+              do nz=nu1, nl1-1
+                 fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
+                 fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
+              end do
+           end do
+        end do
+        delta=wallclock()-t1
+        !$acc exit data delete(ulevels_nod2D, ulevels_nod2D, LO, ttf)
+        !$acc exit data copyout(fct_ttf_max, fct_ttf_min)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: collapse iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        nl = maxval(nlevels_nod2D(:))
+
+        !$acc enter data copyin(ulevels_nod2D, ulevels_nod2D, LO, ttf)
+        !$acc enter data create(fct_ttf_max, fct_ttf_min)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(ulevels_nod2D, ulevels_nod2D, LO, ttf, fct_ttf_max, fct_ttf_min)&
+           !$acc& collapse(2)
+           do n=1,myDim_nod2D
+              do nz=1, nl
+                 nu1 = ulevels_nod2D(n)
+                 nl1 = nlevels_nod2D(n)
+                 if(nu1 <= nz .and. nz < nl1) then
+                    fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
+                    fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
+                 end if
+              end do
+           end do
+        end do
+        delta=wallclock()-t1
+        !$acc exit data delete(ulevels_nod2D, ulevels_nod2D, LO, ttf)
+        !$acc exit data copyout(fct_ttf_max, fct_ttf_min)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+#endif
 
         deallocate(ulevels_nod2D)
         deallocate(nlevels_nod2D)

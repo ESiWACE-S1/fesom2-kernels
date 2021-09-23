@@ -24,7 +24,13 @@ program oce_adv_tra_fct_loop_b1_horizontal
         integer, dimension(:,:), allocatable :: nodenz_lbs
         integer :: n_elemnz, nlevels_sum
 
-        double precision :: a
+        double precision :: a, s_
+        integer :: e_
+        integer :: nl
+
+        integer :: n_node2edges
+        integer, dimension(:), allocatable :: csr_node2edges !(0:myDim_nod2D)
+        integer, dimension(:), allocatable :: csr_node2edges_ID
         !https://stackoverflow.com/a/6880672
         real(8)::t1,delta, delta_orig
 
@@ -47,15 +53,6 @@ program oce_adv_tra_fct_loop_b1_horizontal
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-           !$acc parallel loop gang present(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)&
-           !$acc& private(enodes,nl12,nu12)&
-#ifdef with_acc_vector_length
-           !$acc& vector_length(z_vector_length)&
-#endif
-#ifdef with_acc_async
-           !$acc& async(stream_hor_adv_tra)&
-#endif
-           !$acc
            do edge=1, mydim_edge2d
               enodes(1:2)=edges(:,edge)
               el=edge_tri(:,edge)
@@ -68,15 +65,10 @@ program oce_adv_tra_fct_loop_b1_horizontal
               nu12 = nu1        ; nl12 = max(nl1,nl2)
               if (nu2>0) nu12 = min(nu1,nu2)
 
-              !$acc loop vector
               do nz=nu12, nl12
-                 !$acc atomic update
                  fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, adf_h(nz,edge))
-                 !$acc atomic update
                  fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, adf_h(nz,edge))
-                 !$acc atomic update
                  fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-adf_h(nz,edge))
-                 !$acc atomic update
                  fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-adf_h(nz,edge))
               end do
            end do
@@ -91,30 +83,16 @@ program oce_adv_tra_fct_loop_b1_horizontal
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-           !$acc parallel loop gang present(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)&
-           !$acc& private(enodes,nl12,nu12)&
-#ifdef with_acc_vector_length
-           !$acc& vector_length(z_vector_length)&
-#endif
-#ifdef with_acc_async
-           !$acc& async(stream_hor_adv_tra)&
-#endif
-           !$acc
            do edge=1, mydim_edge2d
               enodes(1:2)=edges(:,edge)
 
               nl12 = nlevels(edge)
               nu12 = ulevels(edge)
 
-              !$acc loop vector
               do nz=nu12, nl12
-                 !$acc atomic update
                  fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, adf_h(nz,edge))
-                 !$acc atomic update
                  fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, adf_h(nz,edge))
-                 !$acc atomic update
                  fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-adf_h(nz,edge))
-                 !$acc atomic update
                  fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-adf_h(nz,edge))
               end do
            end do
@@ -131,16 +109,11 @@ program oce_adv_tra_fct_loop_b1_horizontal
            do edge=1, mydim_edge2d
               enodes(1:2)=edges(:,edge)
 
-              !$acc loop vector
               do nz=ulevels(edge), nlevels(edge)
                  a = adf_h(nz,edge)
-                 !$acc atomic update
                  fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, a)
-                 !$acc atomic update
                  fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, a)
-                 !$acc atomic update
                  fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-a)
-                 !$acc atomic update
                  fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-a)
               end do
            end do
@@ -165,5 +138,148 @@ program oce_adv_tra_fct_loop_b1_horizontal
            end do
            nlevels_sum = nlevels_sum + nl1-1-nu1+1
         end do
+
+#ifdef _OPENACC
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: PRECOMPUTED LEVELS+store: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        !$acc enter data copyin(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)&
+           !$acc& private(enodes)
+           do edge=1, mydim_edge2d
+              enodes(1:2)=edges(:,edge)
+
+              nl12 = nlevels(edge)
+              nu12 = ulevels(edge)
+
+              do nz=nu12, nl12
+                 a = adf_h(nz,edge)
+                 !$acc atomic update
+                 fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, a)
+                 !$acc atomic update
+                 fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, a)
+                 !$acc atomic update
+                 fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-a)
+                 !$acc atomic update
+                 fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-a)
+              end do
+           end do
+        end do
+        delta=wallclock()-t1
+        !$acc exit data delete(nlevels,ulevels,edges,adf_h)
+        !$acc exit data copyout(fct_plus,fct_minus)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: PRECOMPUTED node2edges+store: iterating over",MAX_ITERATIONS, " iterations..."
+        n_node2edges=0
+        allocate(csr_node2edges(0:myDim_nod2D))
+        csr_node2edges(:) = 0
+        do edge=1, mydim_edge2d
+           enodes(1:2)=edges(:,edge)
+
+           csr_node2edges(enodes(1)) = csr_node2edges(enodes(1)) + 1
+           csr_node2edges(enodes(2)) = csr_node2edges(enodes(2)) + 1
+        end do
+        do n=1, myDim_nod2D
+           csr_node2edges(n) = csr_node2edges(n-1) + csr_node2edges(n)
+        end do
+        allocate(csr_node2edges_ID(csr_node2edges(myDim_nod2D)))
+        do n=myDim_nod2D, 1, -1
+           csr_node2edges(n) = csr_node2edges(n-1)
+        end do
+        do edge=1, mydim_edge2d
+           enodes(1:2)=edges(:,edge)
+
+           csr_node2edges(enodes(1)) = csr_node2edges(enodes(1)) + 1
+           csr_node2edges(enodes(2)) = csr_node2edges(enodes(2)) + 1
+           csr_node2edges_ID(csr_node2edges(enodes(1))) =  edge
+           csr_node2edges_ID(csr_node2edges(enodes(2))) = -edge
+        end do
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        !$acc enter data copyin(nlevels,ulevels,fct_plus,fct_minus,adf_h)
+        !$acc enter data copyin(csr_node2edges, csr_node2edges_ID)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(nlevels,ulevels,fct_plus,fct_minus,adf_h, csr_node2edges, csr_node2edges_ID)
+           do n=1, myDim_nod2D
+              do nn=csr_node2edges(n-1)+1, csr_node2edges(n)
+                 edge = csr_node2edges_ID(nn)
+                 e_ = abs(edge)
+                 s_ = edge/e_
+                 !if(edge > 0) then
+                    nl12 = nlevels(e_)
+                    nu12 = ulevels(e_)
+                    do nz=nu12, nl12
+                       a = s_*adf_h(nz,e_)
+                       fct_plus (nz,n)=fct_plus (nz,n) + max(0.0d0, a)
+                       fct_minus(nz,n)=fct_minus(nz,n) + min(0.0d0, a)
+                    end do
+                 !else
+                 !   edge = -edge
+                 !   nl12 = nlevels(edge)
+                 !   nu12 = ulevels(edge)
+                 !   do nz=nu12, nl12
+                 !      a = adf_h(nz,edge)
+                 !      fct_plus (nz,n)=fct_plus (nz,n) + max(0.0d0, -a)
+                 !      fct_minus(nz,n)=fct_minus(nz,n) + min(0.0d0, -a)
+                 !   end do
+                 !end if
+              end do
+           end do
+        end do
+        delta=wallclock()-t1
+        !$acc exit data delete(nlevels,ulevels,edges,adf_h)
+        !$acc exit data copyout(fct_plus,fct_minus)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+#endif
+
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: collapse: iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        nl = maxval(nlevels(:))
+        !$acc enter data copyin(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)&
+           !$acc& private(enodes)&
+           !$acc& collapse(2)
+           do edge=1, mydim_edge2d
+              do nz=1, nl
+                 enodes(1:2)=edges(:,edge)
+
+                 nl12 = nlevels(edge)
+                 nu12 = ulevels(edge)
+
+                 !do nz=nu12, nl12
+                 if(nu12 <= nz .and. nz <= nl12) then
+                    a = adf_h(nz,edge)
+                    !$acc atomic update
+                    fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, a)
+                    !$acc atomic update
+                    fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, a)
+                    !$acc atomic update
+                    fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-a)
+                    !$acc atomic update
+                    fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-a)
+                 end if
+              end do
+           end do
+        end do
+        delta=wallclock()-t1
+        !$acc exit data delete(nlevels,ulevels,edges,adf_h)
+        !$acc exit data copyout(fct_plus,fct_minus)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
 
 end program oce_adv_tra_fct_loop_b1_horizontal

@@ -49,28 +49,20 @@ program oce_adv_tra_fct_loop_a2
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-                !$acc parallel loop gang present(UV_rhs,nl,ulevels,nlevels,elem2D_nodes,fct_ttf_min,fct_ttf_max) &
-                !$acc& private(enodes,nu1,nl1)&
-#ifdef WITH_ACC_VECTOR_LENGTH
-                !$acc& vector_length(z_vector_length)&
-#endif
-                !$acc
                 do elem=1, myDim_elem2D
                         enodes=elem2D_nodes(:,elem)
                         nu1 = ulevels(elem)
                         nl1 = nlevels(elem)
-                        !$acc loop vector
                         do nz=nu1, nl1-1
                                 UV_rhs(1,nz,elem)=maxval(fct_ttf_max(nz,enodes))
                                 UV_rhs(2,nz,elem)=minval(fct_ttf_min(nz,enodes))
                         end do
-                        ! USELESS if (nl1<=nl-1) then
-                                !$acc loop vector
+                        if (nl1<=nl-1) then
                                 do nz=nl1,nl-1
                                         UV_rhs(1,nz,elem)=-bignumber
                                         UV_rhs(2,nz,elem)= bignumber
                                 end do
-                        !endif
+                        endif
                 end do ! --> do elem=1, myDim_elem2D
         end do
         delta=wallclock()-t1
@@ -78,17 +70,12 @@ program oce_adv_tra_fct_loop_a2
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
+#if 1
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "MAXVAL->MAX iterating over",MAX_ITERATIONS, " iterations..."
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-                !$acc parallel loop gang present(UV_rhs,nl,ulevels,nlevels,elem2D_nodes,fct_ttf_min,fct_ttf_max) &
-                !$acc& private(enodes,nu1,nl1)&
-#ifdef WITH_ACC_VECTOR_LENGTH
-                !$acc& vector_length(z_vector_length)&
-#endif
-                !$acc
                 do elem=1, myDim_elem2D
                         enodes=elem2D_nodes(:,elem)
                         nu1 = ulevels(elem)
@@ -108,7 +95,9 @@ program oce_adv_tra_fct_loop_a2
         delta=wallclock()-t1
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
 
+#if 1
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "U_rhs,V_rhs iterating over",MAX_ITERATIONS, " iterations..."
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -117,24 +106,16 @@ program oce_adv_tra_fct_loop_a2
 
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-                !$acc parallel loop gang present(UV_rhs,nl,ulevels,nlevels,elem2D_nodes,fct_ttf_min,fct_ttf_max) &
-                !$acc& private(enodes,nu1,nl1)&
-#ifdef WITH_ACC_VECTOR_LENGTH
-                !$acc& vector_length(z_vector_length)&
-#endif
-                !$acc
                 do elem=1, myDim_elem2D
                         enodes=elem2D_nodes(:,elem)
                         nu1 = ulevels(elem)
                         nl1 = nlevels(elem)
-                        !$acc loop vector
                         do nz=nu1, nl1-1
                                 U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
                                 V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
                                 !U_rhs(nz,elem)=max(fct_ttf_max(nz,enodes(1)), fct_ttf_max(nz,enodes(2)), fct_ttf_max(nz,enodes(3)))
                                 !V_rhs(nz,elem)=min(fct_ttf_min(nz,enodes(1)), fct_ttf_min(nz,enodes(2)), fct_ttf_min(nz,enodes(3)))
                         end do
-                        !$acc loop vector
                         do nz=nl1,nl-1
                            U_rhs(nz,elem)=-bignumber
                            V_rhs(nz,elem)= bignumber
@@ -144,23 +125,18 @@ program oce_adv_tra_fct_loop_a2
         delta=wallclock()-t1
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
 
+#if 1
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "ONLY local NL iterating over",MAX_ITERATIONS, " iterations..."
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-                !$acc parallel loop gang present(UV_rhs,nl,ulevels,nlevels,elem2D_nodes,fct_ttf_min,fct_ttf_max) &
-                !$acc& private(enodes,nu1,nl1)&
-#ifdef WITH_ACC_VECTOR_LENGTH
-                !$acc& vector_length(z_vector_length)&
-#endif
-                !$acc
                 do elem=1, myDim_elem2D
                         enodes=elem2D_nodes(:,elem)
                         nu1 = ulevels(elem)
                         nl1 = nlevels(elem)
-                        !$acc loop vector
                         do nz=nu1, nl1-1
                                 U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
                                 V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
@@ -172,6 +148,7 @@ program oce_adv_tra_fct_loop_a2
         delta=wallclock()-t1
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
 
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         myDim_nod2D = read_nod2D_levels(mype, ulevels_nod2D, nlevels_nod2D)
@@ -194,7 +171,8 @@ program oce_adv_tra_fct_loop_a2
         n_elemnz = 0
         do n=1,myDim_elem2D
            nu1 = ulevels(n)
-           nl1 = nlevels(n)
+           !nl1 = nlevels(n)
+           nl1 = nl
            n_elemnz = n_elemnz + nl1-1-nu1+1
         enddo
         write(*,*) 'n_elemnz', n_elemnz
@@ -209,13 +187,15 @@ program oce_adv_tra_fct_loop_a2
               nn = nn + 1
               csr_elemnz2nodenz(nn) = csr_elemnz2nodenz(nn-1) + 3 ! 3 nodes at this level
            end do
-           !do nz=nl1,nl-1
-           !   nn = nn + 1
-           !   csr_elemnz2nodenz(nn) = csr_elemnz2nodenz(nn-1) + 1 ! out of levels: set node id to -1
-           !end do
+           do nz=nl1,nl-1
+              nn = nn + 1
+              !!csr_elemnz2nodenz(nn) = csr_elemnz2nodenz(nn-1) + 1 ! out of levels: set node id to -1
+              csr_elemnz2nodenz(nn) = csr_elemnz2nodenz(nn-1) ! out of levels: set node id to -1
+           end do
         enddo
         write(*,*) 'csr_elemnz2nodenz', nn, n_elemnz, csr_elemnz2nodenz(n_elemnz)
-        allocate(csr_elemnz2nodenz_ID(csr_elemnz2nodenz(n_elemnz)))
+        allocate(csr_elemnz2nodenz_ID(csr_elemnz2nodenz(n_elemnz)+1))
+        csr_elemnz2nodenz_ID=-1
         nn = 0
         do n=1,myDim_elem2D
            enodes=elem2D_nodes(:,n)
@@ -247,7 +227,13 @@ program oce_adv_tra_fct_loop_a2
            !elemnz2nodenz
            nn=0
            do n=1, n_elemnz
-              !do nn=csr_elemnz2nodenz(n-1)+1,csr_elemnz2nodenz(n) ! => 3
+              !!U_rhs_lbs(n)=-bignumber
+              !!V_rhs_lbs(n)= bignumber
+              !!do nn=csr_elemnz2nodenz(n-1)+1,csr_elemnz2nodenz(n) ! => 3
+              !!   n_n1=csr_elemnz2nodenz_ID(nn)
+              !!   U_rhs_lbs(n) = max(U_rhs_lbs(n), fct_ttf_max_lbs(n_n1))
+              !!   V_rhs_lbs(n) = min(V_rhs_lbs(n), fct_ttf_min_lbs(n_n1))
+              !!end do
               nn=nn+1
               ! get the 3 nodes of the element at current level
               n_n1=csr_elemnz2nodenz_ID(nn)
@@ -255,8 +241,8 @@ program oce_adv_tra_fct_loop_a2
                  U_rhs_lbs(n)=-bignumber
                  V_rhs_lbs(n)= bignumber
               else
-                 n_n2=csr_elemnz2nodenz_ID(nn+2)
-                 n_n3=csr_elemnz2nodenz_ID(nn+3)
+                 n_n2=csr_elemnz2nodenz_ID(nn+1)
+                 n_n3=csr_elemnz2nodenz_ID(nn+2)
                  nn = nn + 2
 
                  U_rhs_lbs(n)=max(fct_ttf_max_lbs(n_n1), fct_ttf_max_lbs(n_n2), fct_ttf_max_lbs(n_n3))
@@ -268,6 +254,7 @@ program oce_adv_tra_fct_loop_a2
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 
+#if 0
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         write(*,*) "LBS on nodes/NZ iterating over",MAX_ITERATIONS, " iterations..."
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -292,6 +279,144 @@ program oce_adv_tra_fct_loop_a2
         delta=wallclock()-t1
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+
+#ifdef _OPENACC
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: U_rhs,V_rhs iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+        !$acc enter data copyin(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        !$acc enter data create(U_rhs, V_rhs)
+           !$acc parallel loop present(elem2D_nodes, ulevels, nlevels, U_rhs, V_rhs, fct_ttf_max, fct_ttf_min) &
+           !$acc & private(enodes)
+           do elem=1, myDim_elem2D
+              enodes=elem2D_nodes(:,elem)
+              nu1 = ulevels(elem)
+              nl1 = nlevels(elem)
+              do nz=nu1, nl1-1
+                 U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
+                 V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
+                 !U_rhs(nz,elem)=max(fct_ttf_max(nz,enodes(1)), fct_ttf_max(nz,enodes(2)), fct_ttf_max(nz,enodes(3)))
+                 !V_rhs(nz,elem)=min(fct_ttf_min(nz,enodes(1)), fct_ttf_min(nz,enodes(2)), fct_ttf_min(nz,enodes(3)))
+              end do
+              do nz=nl1,nl-1
+                 U_rhs(nz,elem)=-bignumber
+                 V_rhs(nz,elem)= bignumber
+              end do
+           end do ! --> do elem=1, myDim_elem2D
+        !$acc exit data copyout(U_rhs, V_rhs)
+        !$acc exit data delete(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        end do
+        delta=wallclock()-t1
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+#endif
+
+#ifdef _OPENACC
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: enter data outside, U_rhs,V_rhs iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        !$acc enter data copyin(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        !$acc enter data create(U_rhs, V_rhs)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(elem2D_nodes, ulevels, nlevels, U_rhs, V_rhs, fct_ttf_max, fct_ttf_min) &
+           !$acc & private(enodes)
+           do elem=1, myDim_elem2D
+              enodes=elem2D_nodes(:,elem)
+              nu1 = ulevels(elem)
+              nl1 = nlevels(elem)
+              do nz=nu1, nl1-1
+                 !U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
+                 !V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
+                 U_rhs(nz,elem)=max(fct_ttf_max(nz,enodes(1)), fct_ttf_max(nz,enodes(2)), fct_ttf_max(nz,enodes(3)))
+                 V_rhs(nz,elem)=min(fct_ttf_min(nz,enodes(1)), fct_ttf_min(nz,enodes(2)), fct_ttf_min(nz,enodes(3)))
+              end do
+              do nz=nl1,nl-1
+                 U_rhs(nz,elem)=-bignumber
+                 V_rhs(nz,elem)= bignumber
+              end do
+           end do ! --> do elem=1, myDim_elem2D
+        end do
+        delta=wallclock()-t1
+        !$acc exit data copyout(U_rhs, V_rhs)
+        !$acc exit data delete(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+#endif
+
+#ifdef _OPENACC
+#if 0
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: enter data outside, maxval, U_rhs,V_rhs iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        !$acc enter data copyin(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        !$acc enter data create(U_rhs, V_rhs)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(elem2D_nodes, ulevels, nlevels, U_rhs, V_rhs, fct_ttf_max, fct_ttf_min) &
+           !$acc & private(enodes)
+           do elem=1, myDim_elem2D
+              enodes=elem2D_nodes(:,elem)
+              nu1 = ulevels(elem)
+              nl1 = nlevels(elem)
+              do nz=nu1, nl1-1
+                 U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
+                 V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
+              end do
+              do nz=nl1,nl-1
+                 U_rhs(nz,elem)=-bignumber
+                 V_rhs(nz,elem)= bignumber
+              end do
+           end do ! --> do elem=1, myDim_elem2D
+        end do
+        delta=wallclock()-t1
+        !$acc exit data copyout(U_rhs, V_rhs)
+        !$acc exit data delete(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') " timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+
+#endif
+#if 1
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        write(*,*) "ACC: collapse iterating over",MAX_ITERATIONS, " iterations..."
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        !$acc enter data copyin(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        !$acc enter data create(U_rhs, V_rhs)
+        t1=wallclock()
+        do n_it=1, MAX_ITERATIONS
+           !$acc parallel loop present(elem2D_nodes, ulevels, nlevels, U_rhs, V_rhs, fct_ttf_max, fct_ttf_min) &
+           !$acc & private(enodes) &
+           !$acc& collapse(2)
+           do elem=1, myDim_elem2D
+              do nz=1, nl
+                 enodes=elem2D_nodes(:,elem)
+                 nu1 = ulevels(elem)
+                 nl1 = nlevels(elem)
+                 if(nu1 <= nz .and. nz < nl1) then
+                    U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
+                    V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
+                 elseif(nl1 <= nz .and. nz < nl) then
+                    U_rhs(nz,elem)=-bignumber
+                    V_rhs(nz,elem)= bignumber
+                 end if
+              end do
+           end do
+        end do
+        delta=wallclock()-t1
+        !$acc exit data copyout(U_rhs, V_rhs)
+        !$acc exit data delete(elem2D_nodes, ulevels, nlevels, fct_ttf_max, fct_ttf_min)
+        write(*,*) "done"
+        write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
+#endif
+#endif
 
         deallocate(ulevels)
         deallocate(nlevels)
