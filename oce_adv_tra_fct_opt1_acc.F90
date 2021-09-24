@@ -94,6 +94,8 @@ program oce_adv_tra_fct
   allocate(adf_v(MAX_LEVELS, myDim_edge2D))
   !$acc enter data create(adf_v)
 
+  nl=maxval(nlevels(:))
+
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   write(*,*) "DEFAULT: iterating over",MAX_ITERATIONS, " iterations..."
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

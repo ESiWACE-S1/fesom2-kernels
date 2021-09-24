@@ -454,7 +454,7 @@ program oce_adv_tra_fct_loop_a1_vlimit1
 #endif
 #endif
 
-#if 1
+#if 0
         allocate(tvert_min_(MAX_LEVELS, myDim_nod2D))
         allocate(tvert_max_(MAX_LEVELS, myDim_nod2D))
         nl = maxval(nlevels_nod2D(:))
@@ -538,8 +538,6 @@ program oce_adv_tra_fct_loop_a1_vlimit1
                  if(nu1 <= nz .and. nz < nl1) then
                     tvert_max__ = -huge(1.0)
                     tvert_min__ =  huge(1.0)
-
-                    !maxval(U_rhs(nz, nod_in_elem2D(1:nod_in_elem2D_num(n))))
                     !$acc loop seq
                     do nn=1, nod_in_elem2D_num(n)
                        elem = nod_in_elem2D(nn,n)

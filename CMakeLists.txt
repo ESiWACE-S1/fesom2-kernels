@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.8...3.19)
 project(fesom2-benchmarks VERSION 1.0.0 LANGUAGES C Fortran)
 
 option(WITH_ACC "compile with OpenACC" OFF)
+option(WITH_ACC_CPU "compile with OpenACC multicore" OFF)
 # https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html
 # https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER_ID.html#variable:CMAKE_%3CLANG%3E_COMPILER_ID
 add_library(options_flags INTERFACE)
@@ -25,6 +26,10 @@ target_compile_options(options_flags INTERFACE
       -acc -ta=tesla:cc80
       -Minfo=accel
      >
+    $<$<BOOL:${WITH_ACC_CPU}>:
+      -acc -ta=multicore
+      -Minfo=accel
+     >
    >
   )
 
@@ -32,6 +37,9 @@ target_link_options(options_flags INTERFACE
   $<$<Fortran_COMPILER_ID:PGI>:
     $<$<BOOL:${WITH_ACC}>:
       -acc -ta=tesla:cc80
+    >
+    $<$<BOOL:${WITH_ACC_CPU}>:
+      -acc -ta=multicore
     >
   >
 )
