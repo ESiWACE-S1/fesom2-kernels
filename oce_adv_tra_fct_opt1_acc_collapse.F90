@@ -198,15 +198,15 @@ program oce_adv_tra_fct
         end do
      end do
      ! loop b1 horizontal
-     !$acc parallel loop present(nlevels,ulevels,edges,fct_plus,fct_minus,adf_h)&
+     !$acc parallel loop present(nlevels_edge,ulevels_edge,edges,fct_plus,fct_minus,adf_h)&
      !$acc& private(enodes)&
      !$acc& collapse(2)
      do edge=1, mydim_edge2d
         do nz=1, nl
            enodes(1:2)=edges(:,edge)
 
-           nl12 = nlevels(edge)
-           nu12 = ulevels(edge)
+           nl12 = nlevels_edge(edge)
+           nu12 = ulevels_edge(edge)
 
            !do nz=nu12, nl12
            if(nu12 <= nz .and. nz <= nl12) then
@@ -283,8 +283,8 @@ program oce_adv_tra_fct
         do nz=1, nl
            enodes(1:2)=edges(:,edge)
 
-           nl12 = nlevels(edge)
-           nu12 = ulevels(edge)
+           nl12 = nlevels_edge(edge)
+           nu12 = ulevels_edge(edge)
 
            !do nz=nu12, nl12
            if(nu12 <= nz .and. nz <= nl12) then
