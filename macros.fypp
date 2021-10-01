@@ -1,0 +1,27 @@
+#:def ranksuffix(RANK)
+$:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
+#:enddef ranksuffix
+
+#:def loop_over_nodes(n_nodes="myDim_nod2D", arrays="", code_nu1_nl1m1)
+#ifdef _OPENACC
+    !$acc parallel loop present(${arrays}$)&
+    !$acc& collapse(2)
+    do n=1, ${n_nodes}$
+       do nz=1, nl
+        nu1 = ulevels_nod2D(n)
+        nl1 = nlevels_nod2D(n)
+        if(nu1 <= nz .and. nz < nl1) then
+            $:code_nu1_nl1
+        end if
+       end do
+    end do
+#else
+    do n=1, ${n_nodes}$
+        nu1 = ulevels_nod2D(n)
+        nl1 = nlevels_nod2D(n)
+        do nz=nu1, nl1-1  
+           $:code_nu1_nl1m1
+        end do
+    end do
+#endif
+#:enddef loop_over_nodes

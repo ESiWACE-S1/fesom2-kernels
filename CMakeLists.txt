@@ -64,3 +64,12 @@ add_executable(       oce_adv_tra_fct_opt1_acc $<TARGET_OBJECTS:loop_utils> oce_
 target_link_libraries(oce_adv_tra_fct_opt1_acc options_flags)
 add_executable(       oce_adv_tra_fct_opt1_acc_collapse $<TARGET_OBJECTS:loop_utils> oce_adv_tra_fct_opt1_acc_collapse.F90)
 target_link_libraries(oce_adv_tra_fct_opt1_acc_collapse options_flags)
+
+include(Fypp.cmake)
+PreProcessFyppFiles(
+	oce_adv_tra_fct_opt2_fypp.fypp
+)
+set(FYPP_FLAGS "")
+
+add_executable(       oce_adv_tra_fct_opt2_fypp     $<TARGET_OBJECTS:loop_utils> oce_adv_tra_fct_opt2_fypp.F90)
+target_link_libraries(oce_adv_tra_fct_opt2_fypp     options_flags)
