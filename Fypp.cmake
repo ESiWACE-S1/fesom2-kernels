@@ -24,6 +24,7 @@ foreach(infileName ${ARGN})
         OUTPUT "${outfile}"
 	COMMAND ${CMAKE_SOURCE_DIR}/bin/fypp ${FYPP_FLAGS} "${infile}" "${outfile}"
         MAIN_DEPENDENCY "${infile}"
+       	DEPENDS macros.fypp
         VERBATIM)
 
 ## Finally add output file to a list

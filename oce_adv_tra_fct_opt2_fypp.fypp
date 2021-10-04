@@ -1,3 +1,7 @@
+! vim: ft=fortran :
+#:mute
+#:include 'macros.fypp'
+#:endmute
 program oce_adv_tra_fct
   use wallclock_mod
   use io_mod
@@ -26,8 +30,15 @@ program oce_adv_tra_fct
 
   integer, dimension(:), allocatable :: nod_in_elem2D_num
   integer, dimension(:,:), allocatable :: nod_in_elem2D
+#ifdef _OPENACC
+  double precision, dimension(:,:), allocatable :: tvert_min
+  double precision, dimension(:,:), allocatable :: tvert_max
+  double precision :: tvert_min__
+  double precision :: tvert_max__
+#else
   double precision, dimension(:), allocatable :: tvert_min
   double precision, dimension(:), allocatable :: tvert_max
+#endif
 
   integer :: nl2, nu2, edge, el(2)
   integer :: myDim_edge2D
@@ -43,145 +54,169 @@ program oce_adv_tra_fct
   double precision, dimension(:,:), allocatable :: areasvol
   
   double precision :: a, an, ae
+  integer :: edim_nod2d = 0
   real(8)::t1,delta, delta_orig
 
   mype = 0
   myDim_nod2D = read_nod2D_levels(mype, ulevels_nod2D, nlevels_nod2D)
+  !$acc enter data copyin(ulevels_nod2D, nlevels_nod2D)
 
   allocate(fct_ttf_min(MAX_LEVELS, myDim_nod2D))
+  !$acc enter data create(fct_ttf_min)
   allocate(fct_ttf_max(MAX_LEVELS, myDim_nod2D))
+  !$acc enter data create(fct_ttf_max)
   allocate(LO(MAX_LEVELS, myDim_nod2D))
+  !$acc enter data create(LO)
   allocate(ttf(MAX_LEVELS, myDim_nod2D))
+  !$acc enter data create(ttf)
   allocate(areasvol(MAX_LEVELS, myDim_nod2D))
+  !$acc enter data create(areasvol)
 
   myDim_elem2D = read_elem2D_nodes(mype, elem2D_nodes)
+  !$acc enter data copyin(elem2D_nodes)
   myDim_elem2D = read_elem2D_levels(mype, ulevels, nlevels)
+  !$acc enter data copyin(ulevels, nlevels)
 
   allocate(U_rhs(MAX_LEVELS, myDim_elem2D))
+  !$acc enter data create(U_rhs)
   allocate(V_rhs(MAX_LEVELS, myDim_elem2D))
+  !$acc enter data create(V_rhs)
 
   myDim_nod2D = read_nod2D_elems(mype, nod_in_elem2D_num, nod_in_elem2D)
+  !$acc enter data copyin(nod_in_elem2D_num, nod_in_elem2D)
 
-  allocate(tvert_min(MAX_LEVELS))
-  allocate(tvert_max(MAX_LEVELS))
+#ifdef _OPENACC
+  allocate(tvert_min(MAX_LEVELS,myDim_nod2D))
+  !$acc enter data create(tvert_min)
+  allocate(tvert_max(MAX_LEVELS,myDim_nod2D))
+  !$acc enter data create(tvert_max)
+#else
+  allocate(tvert_min(MAX_LEVELS,myDim_nod2D))
+  allocate(tvert_max(MAX_LEVELS,myDim_nod2D))
+#endif
 
   myDim_edge2D = read_edges_nodes(mype, edges)
+  !$acc enter data copyin(edges)
   myDim_edge2D = read_edges_levels(mype, ulevels_edge, nlevels_edge)
+  !$acc enter data copyin(ulevels_edge, nlevels_edge)
   myDim_edge2D = read_edges_tri(mype, edge_tri)
+  !$acc enter data copyin(edge_tri)
 
   allocate(fct_plus(MAX_LEVELS, myDim_nod2D))
+  !$acc enter data create(fct_plus)
   allocate(fct_minus(MAX_LEVELS, myDim_nod2D))
+  !$acc enter data create(fct_minus)
   allocate(adf_h(MAX_LEVELS, myDim_edge2D))
+  !$acc enter data create(adf_h)
   allocate(adf_v(MAX_LEVELS, myDim_edge2D))
+  !$acc enter data create(adf_v)
 
+  nl = maxval(nlevels_nod2D(:))
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   write(*,*) "DEFAULT: iterating over",MAX_ITERATIONS, " iterations..."
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   t1=wallclock()
   do n_it=1, MAX_ITERATIONS
      ! loop a1
-     do n=1,myDim_nod2D !+ edim_nod2d
-        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
+     #:block loop_over_nodes(n_nodes='myDim_nod2D+edim_nod2d', &
+       & arrays='fct_ttf_max,fct_ttf_min,LO,ttf')
            fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
            fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
-        end do
-     end do
+     #:endblock loop_over_nodes
 
      ! loop a2
-     do elem=1, myDim_elem2D
-        enodes=elem2D_nodes(:,elem)
-        do nz=ulevels(elem), nlevels(elem)
+     #:block loop_over_elements(arrays='U_rhs,V_rhs,fct_ttf_max,fct_ttf_min')
+     #:contains code_nu1_nl1m1
            U_rhs(nz,elem)=maxval(fct_ttf_max(nz,enodes))
            V_rhs(nz,elem)=minval(fct_ttf_min(nz,enodes))
-        end do
-        do nz=nlevels(elem),nl-1
+     #:contains code_nl1_nl
            U_rhs(nz,elem)=-bignumber
            V_rhs(nz,elem)= bignumber
-        end do
-     end do ! --> do elem=1, myDim_elem2D
+     #:endblock loop_over_elements
 
      ! loop a1 vlimit=1
-     do n=1, myDim_nod2D
-        nu1 = ulevels_nod2D(n)
-        nl1 = nlevels_nod2D(n)
-        do nz=nu1,nl1-1
-           tvert_max(nz) = huge(1.0d0)
+     #:block loop_over_nodes_by_elements(arrays='tvert_max,tvert_min,U_rhs,V_rhs,fct_ttf_max,fct_ttf_min,LO')
+     #:contains code_init
+#ifdef _OPENACC
+           tvert_max__ = -huge(1.0)
+           tvert_min__ =  huge(1.0)
+#else
+           tvert_max(nz) =  huge(1.0d0)
            tvert_min(nz) = -huge(1.0d0)
-        end do
-        !$acc loop vector
-        do nn=1, nod_in_elem2D_num(n)
-           elem = nod_in_elem2D(nn,n)
-           do nz=nu1,nl1-1
-              tvert_max(nz)= max(tvert_max(nz), U_rhs(nz,elem))
-              tvert_min(nz)= min(tvert_min(nz), V_rhs(nz,elem))
-           end do
-        end do
-
+#endif
+     #:contains code_reduce
+#ifdef _OPENACC
+           tvert_max__= max(tvert_max__, U_rhs(nz,elem))
+           tvert_min__= min(tvert_min__, V_rhs(nz,elem))
+#else
+           tvert_max(nz)= max(tvert_max(nz), U_rhs(nz,elem))
+           tvert_min(nz)= min(tvert_min(nz), V_rhs(nz,elem))
+#endif
+     #:contains code_finalize
+#ifdef _OPENACC
+           tvert_max(nz,n) = tvert_max__
+           tvert_min(nz,n) = tvert_min__
+#endif
+     #:contains code_nu1
         !___________________________________________________________________
         ! calc max,min increment of surface layer with respect to low order
         ! solution
-        fct_ttf_max(nu1,n)=tvert_max(nu1)-LO(nu1,n)
-        fct_ttf_min(nu1,n)=tvert_min(nu1)-LO(nu1,n)
-
-        ! calc max,min increment from nz-1:nz+1 with respect to low order
-        ! solution at layer nz
-        do nz=nu1+1,nl1-2
-           fct_ttf_max(nz,n)=max(tvert_max(nz-1),tvert_max(nz), tvert_max(nz+1))-LO(nz,n)
-           fct_ttf_min(nz,n)=min(tvert_min(nz-1),tvert_min(nz), tvert_min(nz+1))-LO(nz,n)
-        end do
-        ! calc max,min increment of bottom layer -1 with respect to low order
-        ! solution
-        nz=nl1-1
+#ifdef _OPENACC
+        fct_ttf_max(nu1,n)=tvert_max(nu1,n)-LO(nu1,n)
+        fct_ttf_min(nu1,n)=tvert_min(nu1,n)-LO(nu1,n)
+#else
         fct_ttf_max(nz,n)=tvert_max(nz)-LO(nz,n)
         fct_ttf_min(nz,n)=tvert_min(nz)-LO(nz,n)
-     end do
+#endif
+
+     #:contains code_nu1p1_nl1m2
+#ifdef _OPENACC
+        fct_ttf_max(nz,n)=max(tvert_max(nz-1,n),tvert_max(nz,n), tvert_max(nz+1,n))-LO(nz,n)
+        fct_ttf_min(nz,n)=min(tvert_min(nz-1,n),tvert_min(nz,n), tvert_min(nz+1,n))-LO(nz,n)
+#else
+        fct_ttf_max(nz,n)=max(tvert_max(nz-1),tvert_max(nz), tvert_max(nz+1))-LO(nz,n)
+        fct_ttf_min(nz,n)=min(tvert_min(nz-1),tvert_min(nz), tvert_min(nz+1))-LO(nz,n)
+#endif
+     #:contains code_nl1m1
+#ifdef _OPENACC
+        fct_ttf_max(nz,n)=tvert_max(nz,n)-LO(nz,n)
+        fct_ttf_min(nz,n)=tvert_min(nz,n)-LO(nz,n)
+#else
+        fct_ttf_max(nz,n)=tvert_max(nz)-LO(nz,n)
+        fct_ttf_min(nz,n)=tvert_min(nz)-LO(nz,n)
+#endif
+     #:endblock loop_over_nodes_by_elements
 
      ! loop b1
-     do n=1, myDim_nod2D
-        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
-           fct_plus(nz,n)=0.
-           fct_minus(nz,n)=0.
-        end do
-     end do
      ! vertical
-     do n=1, myDim_nod2D
-        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
+     #:block loop_over_nodes(arrays='adf_v,fct_plus,fct_minus')
            a = adf_v(nz,n)
            an= adf_v(nz+1,n)
-           fct_plus(nz,n) =fct_plus(nz,n) +(max(0.0d0,a)+max(0.0d0,-an))
-           fct_minus(nz,n)=fct_minus(nz,n)+(min(0.0d0,a)+min(0.0d0,-an))
-        end do
-     end do
+           fct_plus(nz,n) =max(0.0d0,a)+max(0.0d0,-an)
+           fct_minus(nz,n)=min(0.0d0,a)+min(0.0d0,-an)
+     #:endblock loop_over_nodes
+
      ! horizontal
-     do edge=1, myDim_edge2D
-        enodes(1:2)=edges(:,edge)
-        do nz=ulevels_edge(edge), nlevels_edge(edge)
+     #:block loop_over_edges(arrays='fct_plus,fct_minus,adf_h')
            a = adf_h(nz,edge)
            fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, a)
            fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, a)
            fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-a)
            fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-a)
-        end do
-     end do
-
+     #:endblock loop_over_edges
 
      ! loop b2
-     do n=1,myDim_nod2D
-        do nz=ulevels_nod2D(n), nlevels_nod2D(n)
+     #:block loop_over_nodes(arrays='fct_plus,fct_minus,areasvol,fct_ttf_max,fct_ttf_min')
            flux=fct_plus(nz,n)*dt/areasvol(nz,n)+flux_eps
            fct_plus(nz,n)=min(1.0d0,fct_ttf_max(nz,n)/flux)
            flux=fct_minus(nz,n)*dt/areasvol(nz,n)-flux_eps
            fct_minus(nz,n)=min(1.0d0,fct_ttf_min(nz,n)/flux)
-        end do
-     end do
+     #:endblock loop_over_nodes
 
      ! loop b3 (similar to a1)
-     do n=1, myDim_nod2D
-        nu1=ulevels_nod2D(n)
-        nl1=nlevels_nod2D(n)
-
+     #:block loop_over_nodes(arrays='adf_v,fct_plus,fct_minus')
+     #:contains code_nu1
         !_______________________________________________________________________
-        nz=nu1
         ae=1.0d0
         flux=adf_v(nz,n)
         if(flux>=0.0d0) then
@@ -190,9 +225,7 @@ program oce_adv_tra_fct
            ae=min(ae,fct_minus(nz,n))
         end if
         adf_v(nz,n)=ae*adf_v(nz,n) 
-
-        !_______________________________________________________________________
-        do nz=nu1+1,nl1-1
+     #:contains code_nu1_nl1m1
            ae=1.0d0
            flux=adf_v(nz,n)
            if(flux>=0.d0) then
@@ -203,15 +236,10 @@ program oce_adv_tra_fct
               ae=min(ae,fct_minus(nz,n))
            end if
            adf_v(nz,n)=ae*adf_v(nz,n)
-        end do
-        ! the bottom flux is always zero
-     end do
+     #:endblock loop_over_nodes
 
      !Horizontal
-
-     do edge=1, myDim_edge2D
-        enodes(1:2)=edges(:,edge)
-        do nz=ulevels_edge(edge), nlevels_edge(edge)
+     #:block loop_over_edges(arrays='adf_h,fct_plus,fct_minus')
            ae=1.0d0
            flux=adf_h(nz,edge)
 
@@ -224,8 +252,7 @@ program oce_adv_tra_fct
            endif
 
            adf_h(nz,edge)=ae*adf_h(nz,edge)
-        end do
-     end do
+     #:endblock loop_over_edges
 
 
   end do
