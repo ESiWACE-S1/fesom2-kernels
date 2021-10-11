@@ -76,3 +76,6 @@ PreProcessFyppFiles(
 
 add_executable(       oce_adv_tra_fct_opt2_fypp     $<TARGET_OBJECTS:loop_utils> oce_adv_tra_fct_opt2_fypp.F90)
 target_link_libraries(oce_adv_tra_fct_opt2_fypp     options_flags)
+
+add_executable(       adv_tra_vert_impl          $<TARGET_OBJECTS:loop_utils> adv_tra_vert_impl.F90)
+target_link_libraries(adv_tra_vert_impl          options_flags)
