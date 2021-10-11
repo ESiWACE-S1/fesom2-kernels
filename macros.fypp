@@ -1,9 +1,11 @@
+! ;;; -*- mode: fortran; -*-
+! vim: ft=fortran :
 #:def ranksuffix(RANK)
 $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
 #:enddef ranksuffix
 
 #:def loop_over_nodes(code_nu1_nl1m1, code_nl1_nl='', code_nu1='', n_nodes='myDim_nod2D', arrays='', private_arrays='')
-#ifdef _OPENACC
+#:if defined('LOOP_ACC')
     !$acc parallel loop present(ulevels_nod2D,nlevels_nod2D#{if arrays !=''}#,#{endif}#${arrays}$)&
     !$acc& #{if private_arrays !=''}#private(${private_arrays}$)#{endif}# &
     !$acc& collapse(2)
@@ -11,45 +13,45 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
        do nz=1, nl
         nu1 = ulevels_nod2D(n)
         nl1 = nlevels_nod2D(n)
-#:if code_nu1 != ''
+        #:if code_nu1 != ''
         if(nu1 == nz) then
             $:code_nu1
         elseif(nu1 < nz .and. nz < nl1) then
-#:else
+        #:else
         if(nu1 <= nz .and. nz < nl1) then
-#:endif
+        #:endif
             $:code_nu1_nl1m1
-#:if code_nl1_nl != ''
+        #:if code_nl1_nl != ''
         elseif(nl1 <= nz .and. nz < nl) then
             $:code_nl1_nl
-#:endif
+        #:endif
         end if
        end do
     end do
-#else
+#:else
     do n=1, ${n_nodes}$
         nu1 = ulevels_nod2D(n)
         nl1 = nlevels_nod2D(n)
-#:if code_nu1 != ''
+        #:if code_nu1 != ''
         nz=nu1
         $:code_nu1
         do nz=nu1+1, nl1-1  
-#:else
+        #:else
         do nz=nu1, nl1-1  
-#:endif
+        #:endif
            $:code_nu1_nl1m1
         end do
-#:if code_nl1_nl != ''
+        #:if code_nl1_nl != ''
         do nz=nl1,nl-1
            $:code_nl1_nl
         end do
-#:endif
+        #:endif
     end do
-#endif
+#:endif
 #:enddef loop_over_nodes
 
 #:def loop_over_nodes_by_elements(code_init, code_reduce, code_nu1, code_nu1p1_nl1m2, code_nl1m1, code_finalize='',n_nodes='myDim_nod2D', arrays='', private_arrays='')
-#ifdef _OPENACC
+#:if defined('LOOP_ACC')
     !$acc parallel loop present(ulevels_nod2D,nlevels_nod2D, nod_in_elem2D_num, nod_in_elem2D#{if arrays !=''}#,#{endif}#${arrays}$)&
     !$acc& #{if private_arrays !=''}#private(${private_arrays}$)#{endif}# &
     !$acc& collapse(2)
@@ -64,6 +66,7 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
                 elem = nod_in_elem2D(nn,n)
                 $:code_reduce
              end do
+             $:code_finalize
           endif
        end do
     end do
@@ -85,7 +88,7 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
          endif
        end do
     end do
-#else
+#:else
      do n=1, ${n_nodes}$
         nu1 = ulevels_nod2D(n)
         nl1 = nlevels_nod2D(n)
@@ -109,47 +112,47 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
         nz=nl1-1
         $:code_nl1m1
      end do
-#endif
+#:endif
 #:enddef loop_over_nodes_by_elements
 
 #:def loop_over_elements(code_nu1_nl1m1, code_nl1_nl='', n_elemts='myDim_elem2D', arrays='', private_arrays='')
-#ifdef _OPENACC
+#:if defined('LOOP_ACC')
     !$acc parallel loop present(ulevels,nlevels,elem2D_nodes#{if arrays !=''}#,#{endif}#${arrays}$)&
     !$acc& private(enodes#{if private_arrays !=''}#,#{endif}#${private_arrays}$) &
     !$acc& collapse(2)
-do elem=1, ${n_elemts}$
-   do nz=1,nl
+    do elem=1, ${n_elemts}$
+       do nz=1,nl
+          enodes=elem2D_nodes(:,elem)
+          nu1=ulevels(elem)
+          nl1=nlevels(elem)
+               if(nu1 <= nz .and. nz < nl1) then
+                  $:code_nu1_nl1m1
+               #:if code_nl1_nl != ''
+               elseif(nl1 <= nz .and. nz < nl) then
+                  $:code_nl1_nl
+               #:endif
+               end if
+       end do
+    end do
+#:else
+   do elem=1, ${n_elemts}$
       enodes=elem2D_nodes(:,elem)
-      nu1=ulevels(elem)
-      nl1=nlevels(elem)
-           if(nu1 <= nz .and. nz < nl1) then
-              $:code_nu1_nl1m1
-#:if code_nl1_nl != ''
-           elseif(nl1 <= nz .and. nz < nl) then
-              $:code_nl1_nl
+      nu1 = ulevels(elem)
+      nl1 = nlevels(elem)
+      do nz=nu1, nl1-1
+        $:code_nu1_nl1m1
+      end do
+      #:if code_nl1_nl != ''
+      do nz=nl1,nl-1
+        $:code_nl1_nl
+      end do
+      #:endif
+   end do
 #:endif
-           end if
-   end do
-end do ! --> do elem=1, myDim_elem2D
-#else
-do elem=1, ${n_elemts}$
-   enodes=elem2D_nodes(:,elem)
-   nu1 = ulevels(elem)
-   nl1 = nlevels(elem)
-   do nz=nu1, nl1-1
-     $:code_nu1_nl1m1
-   end do
-   #:if code_nl1_nl != ''
-   do nz=nl1,nl-1
-     $:code_nl1_nl
-   end do
-   #:endif
-end do ! --> do elem=1, myDim_elem2D
-#endif
 #:enddef loop_over_elements
 
 #:def loop_over_edges(code_nu1_nl1, n_edges='myDim_edge2D', arrays='', private_arrays='')
-#ifdef _OPENACC
+#:if defined('LOOP_ACC')
     !$acc parallel loop present(ulevels_edge,nlevels_edge,edges#{if arrays !=''}#,#{endif}#${arrays}$)&
     !$acc& private(enodes#{if private_arrays !=''}#,#{endif}#${private_arrays}$) &
     !$acc& collapse(2)
@@ -163,7 +166,7 @@ end do ! --> do elem=1, myDim_elem2D
            endif
         end do
      end do
-#else
+#:else
      do edge=1, myDim_edge2D
         enodes(1:2)=edges(:,edge)
         nu1 = ulevels_edge(edge)
@@ -172,5 +175,5 @@ end do ! --> do elem=1, myDim_elem2D
           $:code_nu1_nl1
         end do
      end do
-#endif
+#:endif
 #:enddef loop_over_edges

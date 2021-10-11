@@ -67,6 +67,9 @@ target_link_libraries(oce_adv_tra_fct_opt1_acc_collapse options_flags)
 
 include(Fypp.cmake)
 set(FYPP_FLAGS "")
+if(WITH_ACC)
+	set(FYPP_FLAGS ${FYPP_FLAGS} --define=LOOP_ACC)
+endif()
 PreProcessFyppFiles(
 	oce_adv_tra_fct_opt2_fypp.fypp
 )
