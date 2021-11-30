@@ -12,6 +12,7 @@ Makefile
 *.mod
 *.a
 adv_tra_vert_impl
+adv_tra_vert_impl_acc
 oce_adv_tra_fct_opt1
 oce_adv_tra_fct_opt1_acc
 oce_adv_tra_fct_opt1_acc_collapse

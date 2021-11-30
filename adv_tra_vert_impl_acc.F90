@@ -48,6 +48,9 @@ program adv_tra_vert_impl
   t1=wallclock()
   do n_it=1, MAX_ITERATIONS
     ! loop over local nodes
+    !$acc parallel loop gang present(W,ttf,nlevels_nod2D,ulevels_nod2D,area,hnode_new,areasvol)&
+    !$acc& default(none) &
+    !$acc& private(nzmax,nzmin,nz,n,a,b,c,tr,cp,tp,zinv,dz,c1,v_adv)
     do n=1,myDim_nod2D
         ! max. number of levels at node n
         nzmax=nlevels_nod2D(n)
@@ -71,6 +74,8 @@ program adv_tra_vert_impl
 
         !_______________________________________________________________________
         ! Regular part of coefficients: --> 2nd...nl-2 layer
+        !$acc loop vector
+        !private(v_adv)
         do nz=nzmin+1, nzmax-2
             ! update from the vertical advection
             v_adv=zinv*area(nz  ,n)/areasvol(nz,n)
@@ -96,6 +101,7 @@ program adv_tra_vert_impl
         dz=hnode_new(nz,n) ! It would be (zbar(nz)-zbar(nz+1)) if not ALE
         tr(nz)=-(b(nz)-dz)*ttf(nz,n)-c(nz)*ttf(nz+1,n)
 
+        !$acc loop vector
         do nz=nzmin+1,nzmax-2
             tr(nz)=-a(nz)*ttf(nz-1,n)-(b(nz)-hnode_new(nz,n))*ttf(nz,n)-c(nz)*ttf(nz+1,n)
         end do
@@ -109,6 +115,7 @@ program adv_tra_vert_impl
         tp(nz) = tr(nz)/b(nz)
 
         ! solve for vectors c-prime and t, s-prime
+        !ERROR $acc loop vector private(m)
         do nz = nzmin+1,nzmax-1
             m = b(nz)-cp(nz-1)*a(nz)
             cp(nz) = c(nz)/m
@@ -120,12 +127,14 @@ program adv_tra_vert_impl
         tr(nzmax-1) = tp(nzmax-1)
 
         ! solve for x from the vectors c-prime and d-prime
+        !ERROR $acc loop vector
         do nz = nzmax-2, nzmin, -1
             tr(nz) = tp(nz)-cp(nz)*tr(nz+1)
         end do
 
         !_______________________________________________________________________
         ! update tracer
+        !$acc loop vector
         do nz=nzmin,nzmax-1
             ttf(nz,n)=ttf(nz,n)+tr(nz)
         end do

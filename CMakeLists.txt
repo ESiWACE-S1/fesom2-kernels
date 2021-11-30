@@ -79,6 +79,8 @@ target_link_libraries(oce_adv_tra_fct_opt2_fypp     options_flags)
 
 add_executable(       adv_tra_vert_impl          $<TARGET_OBJECTS:loop_utils> adv_tra_vert_impl.F90)
 target_link_libraries(adv_tra_vert_impl          options_flags)
+add_executable(       adv_tra_vert_impl_acc      $<TARGET_OBJECTS:loop_utils> adv_tra_vert_impl_acc.F90)
+target_link_libraries(adv_tra_vert_impl_acc      options_flags)
 
 find_package(MPI)
 add_executable(exchange_nod         $<TARGET_OBJECTS:loop_utils> exchange_nod.F90 distributed.F90)
