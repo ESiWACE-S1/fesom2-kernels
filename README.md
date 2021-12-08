@@ -1,6 +1,6 @@
 fesom2-kernels
 
-Kernels extracted from https://github.com/FESOM/fesom2 to ease:
+Kernels extracted from https://github.com/FESOM/fesom2 (233d72b62585c490e27c1212437d0ba283754169) to ease:
 - to compare different optimisation
 - to compare different OpenACC porting strategies
 
