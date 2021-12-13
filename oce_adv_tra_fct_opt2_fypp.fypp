@@ -31,7 +31,7 @@ program oce_adv_tra_fct
 
   integer, dimension(:), allocatable :: nod_in_elem2D_num
   integer, dimension(:,:), allocatable :: nod_in_elem2D
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
   double precision, dimension(:,:), allocatable :: tvert_min
   double precision, dimension(:,:), allocatable :: tvert_max
   double precision :: tvert_min__
@@ -86,14 +86,14 @@ program oce_adv_tra_fct
   myDim_nod2D = read_nod2D_elems(mype, nod_in_elem2D_num, nod_in_elem2D)
   !$acc enter data copyin(nod_in_elem2D_num, nod_in_elem2D)
 
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
   allocate(tvert_min(MAX_LEVELS,myDim_nod2D))
   !$acc enter data create(tvert_min)
   allocate(tvert_max(MAX_LEVELS,myDim_nod2D))
   !$acc enter data create(tvert_max)
 #:else
-  allocate(tvert_min(MAX_LEVELS,myDim_nod2D))
-  allocate(tvert_max(MAX_LEVELS,myDim_nod2D))
+  allocate(tvert_min(MAX_LEVELS))
+  allocate(tvert_max(MAX_LEVELS))
 #:endif
 
   myDim_edge2D = read_edges_nodes(mype, edges)
@@ -138,15 +138,15 @@ program oce_adv_tra_fct
      ! loop a1 vlimit=1
      #:block loop_over_nodes_by_elements(arrays='tvert_max,tvert_min,U_rhs,V_rhs,fct_ttf_max,fct_ttf_min,LO')
      #:contains code_init
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
            tvert_max__ = -huge(1.0)
            tvert_min__ =  huge(1.0)
 #:else
-           tvert_max(nz) =  huge(1.0d0)
-           tvert_min(nz) = -huge(1.0d0)
+           tvert_max(nz) = -huge(1.0d0)
+           tvert_min(nz) =  huge(1.0d0)
 #:endif
      #:contains code_reduce
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
            tvert_max__= max(tvert_max__, U_rhs(nz,elem))
            tvert_min__= min(tvert_min__, V_rhs(nz,elem))
 #:else
@@ -154,7 +154,7 @@ program oce_adv_tra_fct
            tvert_min(nz)= min(tvert_min(nz), V_rhs(nz,elem))
 #:endif
      #:contains code_finalize
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
            tvert_max(nz,n) = tvert_max__
            tvert_min(nz,n) = tvert_min__
 #:endif
@@ -162,7 +162,7 @@ program oce_adv_tra_fct
         !___________________________________________________________________
         ! calc max,min increment of surface layer with respect to low order
         ! solution
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
         fct_ttf_max(nu1,n)=tvert_max(nu1,n)-LO(nu1,n)
         fct_ttf_min(nu1,n)=tvert_min(nu1,n)-LO(nu1,n)
 #:else
@@ -171,7 +171,7 @@ program oce_adv_tra_fct
 #:endif
 
      #:contains code_nu1p1_nl1m2
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
         fct_ttf_max(nz,n)=max(tvert_max(nz-1,n),tvert_max(nz,n), tvert_max(nz+1,n))-LO(nz,n)
         fct_ttf_min(nz,n)=min(tvert_min(nz-1,n),tvert_min(nz,n), tvert_min(nz+1,n))-LO(nz,n)
 #:else
@@ -179,7 +179,7 @@ program oce_adv_tra_fct
         fct_ttf_min(nz,n)=min(tvert_min(nz-1),tvert_min(nz), tvert_min(nz+1))-LO(nz,n)
 #:endif
      #:contains code_nl1m1
-#:if defined('LOOP_ACC')
+#:if defined('LOOP_ACC') or defined('LOOP_OMP')
         fct_ttf_max(nz,n)=tvert_max(nz,n)-LO(nz,n)
         fct_ttf_min(nz,n)=tvert_min(nz,n)-LO(nz,n)
 #:else
@@ -201,12 +201,16 @@ program oce_adv_tra_fct
      #:block loop_over_edges(arrays='fct_plus,fct_minus,adf_h')
            a = adf_h(nz,edge)
            #{if defined('LOOP_ACC')}#!$acc atomic update#{endif}#
+           #{if defined('LOOP_OMP')}#!$omp atomic update#{endif}#
            fct_plus (nz,enodes(1))=fct_plus (nz,enodes(1)) + max(0.0d0, a)
            #{if defined('LOOP_ACC')}#!$acc atomic update#{endif}#
+           #{if defined('LOOP_OMP')}#!$omp atomic update#{endif}#
            fct_minus(nz,enodes(1))=fct_minus(nz,enodes(1)) + min(0.0d0, a)
            #{if defined('LOOP_ACC')}#!$acc atomic update#{endif}#
+           #{if defined('LOOP_OMP')}#!$omp atomic update#{endif}#
            fct_plus (nz,enodes(2))=fct_plus (nz,enodes(2)) + max(0.0d0,-a)
            #{if defined('LOOP_ACC')}#!$acc atomic update#{endif}#
+           #{if defined('LOOP_OMP')}#!$omp atomic update#{endif}#
            fct_minus(nz,enodes(2))=fct_minus(nz,enodes(2)) + min(0.0d0,-a)
      #:endblock loop_over_edges
 

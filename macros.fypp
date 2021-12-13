@@ -29,15 +29,18 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
        end do
     end do
 #:else
+#:if defined('LOOP_OMP')
+    !$omp parallel do #{if private_arrays !=''}#private(${private_arrays}$)#{endif}#
+#:endif
     do n=1, ${n_nodes}$
         nu1 = ulevels_nod2D(n)
         nl1 = nlevels_nod2D(n)
         #:if code_nu1 != ''
         nz=nu1
         $:code_nu1
-        do nz=nu1+1, nl1-1  
+        do nz=nu1+1, nl1-1
         #:else
-        do nz=nu1, nl1-1  
+        do nz=nu1, nl1-1
         #:endif
            $:code_nu1_nl1m1
         end do
@@ -89,6 +92,9 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
        end do
     end do
 #:else
+#:if defined('LOOP_OMP')
+    !$omp parallel do #{if private_arrays !=''}#private(${private_arrays}$)#{endif}#
+#:endif
      do n=1, ${n_nodes}$
         nu1 = ulevels_nod2D(n)
         nl1 = nlevels_nod2D(n)
@@ -101,6 +107,11 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
               $:code_reduce
            end do
         end do
+        #:if code_finalize != ''
+        do nz=nu1,nl1-1
+           $:code_finalize
+        end do
+        #:endif
 
         nz=nu1
         $:code_nu1
@@ -135,6 +146,9 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
        end do
     end do
 #:else
+#:if defined('LOOP_OMP')
+    !$omp parallel do #{if private_arrays !=''}#private(${private_arrays}$)#{endif}#
+#:endif
    do elem=1, ${n_elemts}$
       enodes=elem2D_nodes(:,elem)
       nu1 = ulevels(elem)
@@ -167,6 +181,9 @@ $:'' if RANK == 0 else '(' + ':' + ',:' * (RANK - 1) + ')'
         end do
      end do
 #:else
+#:if defined('LOOP_OMP')
+    !$omp parallel do #{if private_arrays !=''}#private(${private_arrays}$)#{endif}#
+#:endif
      do edge=1, myDim_edge2D
         enodes(1:2)=edges(:,edge)
         nu1 = ulevels_edge(edge)

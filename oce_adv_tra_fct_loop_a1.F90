@@ -26,6 +26,7 @@ program oce_adv_tra_fct_loop_a1
         integer :: nl
         !https://stackoverflow.com/a/6880672
         real(8)::t1,delta, delta_orig
+        integer :: number_nnz, number_nnzmax
 
         mype = 0
         myDim_nod2D = read_nod2D_levels(mype, ulevels_nod2D, nlevels_nod2D)
@@ -41,10 +42,12 @@ program oce_adv_tra_fct_loop_a1
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
+                !number_nnz = 0
                 do n=1,myDim_nod2D
                         nu1 = ulevels_nod2D(n)
                         nl1 = nlevels_nod2D(n)
                         do nz=nu1, nl1-1
+                                !number_nnz = number_nnz+1
                                 fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
                                 fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
                         end do
@@ -171,30 +174,26 @@ program oce_adv_tra_fct_loop_a1
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         nl = maxval(nlevels_nod2D(:))
 
-        !$acc enter data copyin(ulevels_nod2D, ulevels_nod2D, LO, ttf)
-        !$acc enter data create(fct_ttf_max, fct_ttf_min)
         t1=wallclock()
         do n_it=1, MAX_ITERATIONS
-           !$acc parallel loop present(ulevels_nod2D, ulevels_nod2D, LO, ttf, fct_ttf_max, fct_ttf_min)&
-           !$acc& collapse(2)
+           !number_nnzmax = 0
            do n=1,myDim_nod2D
               do nz=1, nl
-                 nu1 = ulevels_nod2D(n)
-                 nl1 = nlevels_nod2D(n)
-                 if(nu1 <= nz .and. nz < nl1) then
+                 !number_nnzmax = number_nnzmax+1
                     fct_ttf_max(nz,n)=max(LO(nz,n), ttf(nz,n))
                     fct_ttf_min(nz,n)=min(LO(nz,n), ttf(nz,n))
-                 end if
               end do
            end do
+           fct_ttf_min(1) = 0
+           fct_ttf_max(1) = 0
         end do
         delta=wallclock()-t1
-        !$acc exit data delete(ulevels_nod2D, ulevels_nod2D, LO, ttf)
-        !$acc exit data copyout(fct_ttf_max, fct_ttf_min)
         write(*,*) "done"
         write(*,'(a,3(f14.6,x))') "timing", delta, delta/real(MAX_ITERATIONS), delta_orig/delta
 #endif
 #endif
+
+        write(*,*) 'nnz', number_nnz, number_nnzmax, real(number_nnzmax)/real(number_nnz)
 
         deallocate(ulevels_nod2D)
         deallocate(nlevels_nod2D)

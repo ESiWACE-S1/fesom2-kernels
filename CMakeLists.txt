@@ -2,8 +2,15 @@ cmake_minimum_required(VERSION 3.8...3.19)
 
 project(fesom2-benchmarks VERSION 1.0.0 LANGUAGES C Fortran)
 
+option(WITH_OMP "compile with OpenMP" OFF)
 option(WITH_ACC "compile with OpenACC" OFF)
 option(WITH_ACC_CPU "compile with OpenACC multicore" OFF)
+if(WITH_ACC AND WITH_OMP)
+	message(WARNING "WITH_ACC takes precedence over WITH_OMP: disable WITH_ACC if you nant OpenMP support")
+endif()
+if(WITH_OMP)
+	find_package(OpenMP REQUIRED)
+endif()
 # https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html
 # https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER_ID.html#variable:CMAKE_%3CLANG%3E_COMPILER_ID
 add_library(options_flags INTERFACE)
@@ -43,6 +50,9 @@ target_link_options(options_flags INTERFACE
     >
   >
 )
+target_link_libraries(options_flags INTERFACE
+	$<$<BOOL:${WITH_OMP}>:OpenMP::OpenMP_Fortran>
+)
 
 add_library(loop_utils OBJECT wallclock.c wallclock.F90 io.F90)
 
@@ -69,6 +79,9 @@ include(Fypp.cmake)
 set(FYPP_FLAGS "")
 if(WITH_ACC)
 	set(FYPP_FLAGS ${FYPP_FLAGS} --define=LOOP_ACC)
+endif()
+if(WITH_OMP)
+	set(FYPP_FLAGS ${FYPP_FLAGS} --define=LOOP_OMP)
 endif()
 PreProcessFyppFiles(
 	oce_adv_tra_fct_opt2_fypp.fypp
