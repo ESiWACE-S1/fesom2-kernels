@@ -22,7 +22,7 @@ foreach(infileName ${ARGN})
     # Custom command to do the processing
     add_custom_command(
         OUTPUT "${outfile}"
-	COMMAND ${CMAKE_SOURCE_DIR}/bin/fypp "${FYPP_FLAGS}" "${infile}" "${outfile}"
+	COMMAND ${CMAKE_SOURCE_DIR}/bin/fypp ${FYPP_FLAGS} "${infile}" "${outfile}"
         MAIN_DEPENDENCY "${infile}"
        	DEPENDS macros.fypp
         VERBATIM)
