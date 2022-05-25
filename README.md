@@ -12,7 +12,7 @@ The authors acknowledge the funding from the ESiWACE2 project. The ESiWACE2 proj
 
 This repository contains binary input files. Those files have not been commited to the history but are tracked using git-annex.
 
-You can use DataLad, a tool wrapping Git and git-annex. Install it via your pacakge manager or using pip
+You can use DataLad, a tool wrapping Git and git-annex. Install it via your package manager or using pip
 ````sh
 pip install datalad
 ````
@@ -26,7 +26,7 @@ The steps are:
 datalad clone https://github.com/ESiWACE-S1/fesom2-kernels
 cd fesom2-kernels
 git annex enableremote esiwace-s1-lfs
-datalad get intputs/
+datalad get inputs/
 ````
 
 Happy benchmarking
