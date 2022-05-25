@@ -92,8 +92,8 @@ program oce_adv_tra_fct
   allocate(tvert_max(MAX_LEVELS,myDim_nod2D))
   !$acc enter data create(tvert_max)
 #:else
-  allocate(tvert_min(MAX_LEVELS,myDim_nod2D))
-  allocate(tvert_max(MAX_LEVELS,myDim_nod2D))
+  allocate(tvert_min(MAX_LEVELS))
+  allocate(tvert_max(MAX_LEVELS))
 #:endif
 
   myDim_edge2D = read_edges_nodes(mype, edges)
