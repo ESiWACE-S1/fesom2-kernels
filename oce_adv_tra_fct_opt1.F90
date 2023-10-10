@@ -74,6 +74,8 @@ program oce_adv_tra_fct
   allocate(adf_h(MAX_LEVELS, myDim_edge2D))
   allocate(adf_v(MAX_LEVELS, myDim_edge2D))
 
+  nl=maxval(nlevels(:))
+
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   write(*,*) "DEFAULT: iterating over",MAX_ITERATIONS, " iterations..."
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
